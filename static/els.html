@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ELS Control Head</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #050608;
+      color: #e6edf3;
+      font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #scale-wrap {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Base Chassis (fills 100% of window without stretching text) */
+    .chassis {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: clamp(12px, 3vh, 24px) clamp(16px, 3.5vw, 28px);
+      background: linear-gradient(180deg, #101518 0%, #090c0e 100%);
+      border: 3px solid #1c2b2f;
+      border-radius: 8px;
+      box-shadow:
+        inset 0 2px 1px rgba(255,255,255,0.08),
+        inset 0 -3px 8px rgba(0,0,0,0.85),
+        0 16px 40px rgba(0,0,0,0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 9px;
+    }
+
+    /* 1. fedsig (VFD Cyber/Emerald) */
+    .chassis.preset-fedsig .telemetry-bay {
+      background: #020807;
+      border-color: #13312e;
+    }
+    .chassis.preset-fedsig .oled-mode.c1 { color: #5eead4; }
+    .chassis.preset-fedsig .oled-mode.c2 { color: #38bdf8; text-shadow: 0 0 8px rgba(56,189,248,0.6); }
+    .chassis.preset-fedsig .oled-mode.c3 { color: #34d399; text-shadow: 0 0 8px rgba(52,211,153,0.7); }
+
+    /* 2. interceptor (Carbon / Night-Ops Crimson-Amber) */
+    .chassis.preset-interceptor {
+      background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0 2px, transparent 2px 6px),
+        repeating-linear-gradient(-45deg, rgba(0,0,0,0.35) 0 2px, transparent 2px 6px),
+        #101114;
+      border-color: #3a2325;
+    }
+    .chassis.preset-interceptor .telemetry-bay {
+      background: #080405;
+      border-color: #33191b;
+    }
+    .chassis.preset-interceptor .brand { color: #fca5a5; }
+
+    /* 3. rotary (Old-School 1980s/90s Halogen / Chrome & Bakelite) */
+    .chassis.preset-rotary {
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 2px),
+        linear-gradient(180deg, #2b2722 0%, #1a1714 55%, #110f0d 100%);
+      border: 3px solid #6b6356;
+      border-radius: 4px;
+    }
+    .chassis.preset-rotary .brand { color: #fde68a; letter-spacing: 0.14em; }
+    .chassis.preset-rotary .model { color: #a89f91; }
+    .chassis.preset-rotary .telemetry-bay {
+      background: #0c0905;
+      border-color: #4a4033;
+      border-radius: 3px;
+    }
+    .chassis.preset-rotary .lb-cell {
+      border-radius: 999px;
+      transition: background 0.14s ease, box-shadow 0.14s ease;
+    }
+    .chassis.preset-rotary .btn {
+      border-radius: 3px;
+      background: linear-gradient(180deg, #332e27 0%, #1c1915 100%);
+      border-color: #544b3e;
+    }
+    .chassis.preset-rotary .oled-mode.c1 { color: #d6cfc2; }
+    .chassis.preset-rotary .oled-mode.c2 { color: #fbbf24; text-shadow: 0 0 8px rgba(251,191,36,0.6); }
+    .chassis.preset-rotary .oled-mode.c3 { color: #f87171; text-shadow: 0 0 8px rgba(248,113,113,0.7); }
+
+    /* 4. amber (DOT / Utility Yellow-Only) */
+    .chassis.preset-amber {
+      background:
+        repeating-linear-gradient(
+          -45deg,
+          rgba(245, 158, 11, 0.08) 0px,
+          rgba(245, 158, 11, 0.08) 10px,
+          transparent 10px,
+          transparent 20px
+        ),
+        linear-gradient(180deg, #1f1c14 0%, #12100c 100%);
+      border-color: #6b4c10;
+    }
+    .chassis.preset-amber .brand { color: #fbbf24; }
+    .chassis.preset-amber .telemetry-bay {
+      background: #080602;
+      border-color: #4a350b;
+    }
+    .chassis.preset-amber .oled-mode.c2 {
+      color: #fbbf24;
+      text-shadow: 0 0 10px rgba(245,158,11,0.8);
+    }
+
+    /* Corner hex screws */
+    .screw {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #555e6e, #1a1e26 75%);
+      border: 1px solid #090b0f;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.2), 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .screw::after {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      background: #0a0c10;
+      clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+    }
+    .screw.tl { top: 7px; left: 7px; }
+    .screw.tr { top: 7px; right: 7px; }
+    .screw.bl { bottom: 7px; left: 7px; }
+    .screw.br { bottom: 7px; right: 7px; }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px 5px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .nameplate { display: flex; flex-direction: column; gap: 1px; }
+    .brand {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      color: #c9d1d9;
+      text-shadow: 0 1px 2px #000;
+    }
+    .model {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #6e7681;
+      text-transform: uppercase;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: #07090c;
+      border: 1px solid #262c36;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.9);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #6e7681;
+    }
+    .status-led { width: 7px; height: 7px; border-radius: 50%; background: #2d333b; }
+    .status-led.ok { background: #22c55e; box-shadow: 0 0 8px #22c55e, 0 0 2px #fff; }
+    .status-led.warn { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+
+    .telemetry-bay {
+      background: #05070a;
+      border: 2px solid #1f242d;
+      border-radius: 6px;
+      padding: 7px 9px;
+      box-shadow: inset 0 3px 10px rgba(0,0,0,0.95), 0 1px 0 rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .lightbar-row {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      padding: 3px 4px;
+      background: #020305;
+      border: 1px solid #161b22;
+      border-radius: 4px;
+    }
+    .lb-cell {
+      height: clamp(10px, 2.8vh, 24px);
+      border-radius: 2px;
+      background: #12161f;
+      border: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.05s, box-shadow 0.05s;
+    }
+    .telemetry-bay.active .lb-r.lit { background: #ff2a2a; box-shadow: 0 0 14px #ff2a2a, 0 0 4px #fff; }
+    .telemetry-bay.active .lb-b.lit { background: #2979ff; box-shadow: 0 0 14px #2979ff, 0 0 4px #fff; }
+    .telemetry-bay.active .lb-w.lit { background: #ffffff; box-shadow: 0 0 14px #ffffff; }
+    .telemetry-bay.active .lb-a.lit { background: #f59e0b; box-shadow: 0 0 14px #f59e0b, 0 0 4px #fde68a; }
+
+    .oled-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 2px 2px 0;
+    }
+    .oled-mode { font-weight: 800; color: #4b5563; font-size: clamp(11px, 2.5vmin, 18px); }
+    .oled-mode.c1 { color: #9ca3af; }
+    .oled-mode.c2 { color: #60a5fa; text-shadow: 0 0 8px rgba(59,130,246,0.6); }
+    .oled-mode.c3 { color: #f87171; text-shadow: 0 0 8px rgba(239,68,68,0.7); }
+
+    .vu-meter { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+    .vu-bar { width: 4px; height: 3px; border-radius: 1px; background: #1c222b; transition: height 0.07s, background 0.07s; }
+    .vu-bar.lit { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+    .vu-bar.peak { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+    .control-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .group-label {
+      font-size: clamp(9px, 1.8vmin, 13px);
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      color: #6b7280;
+      text-transform: uppercase;
+      margin: 0 0 4px 2px;
+    }
+    .grid-3 { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; min-height: 0; }
+    .grid-2 { flex: 1; display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; min-height: 0; }
+
+    .btn {
+      position: relative;
+      background: linear-gradient(180deg, #252a34 0%, #171a21 100%);
+      border: 1px solid #353c4a;
+      border-bottom-width: 3px;
+      border-bottom-color: #0c0e12;
+      border-radius: 6px;
+      padding: 8px 6px 7px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 3px 6px rgba(0,0,0,0.6);
+      transition: all 0.1s ease;
+    }
+    .btn-led {
+      width: clamp(28px, 6vw, 52px);
+      height: clamp(4px, 0.9vh, 7px);
+      border-radius: 2px;
+      background: #101319;
+      border: 1px solid #080a0d;
+      margin-bottom: 1px;
+    }
+    .btn-title { font-size: clamp(12px, 3vmin, 22px); font-weight: 900; letter-spacing: 0.1em; color: #6b7280; }
+    .btn-sub { font-size: clamp(9px, 1.9vmin, 14px); font-weight: 700; letter-spacing: 0.08em; color: #484f58; text-transform: uppercase; }
+
+    .btn.on-c1 { border-color: #6b7280; background: linear-gradient(180deg, #2c3340 0%, #1d2129 100%); }
+    .btn.on-c1 .btn-led { background: #cbd5e1; box-shadow: 0 0 8px #cbd5e1; }
+    .btn.on-c1 .btn-title { color: #e2e8f0; }
+
+    .btn.on-c2 {
+      border-color: #3b82f6;
+      background: linear-gradient(180deg, #1a3561 0%, #0f1f3a 100%);
+      box-shadow: inset 0 1px 0 rgba(147,197,253,0.25), 0 0 16px rgba(59,130,246,0.35);
+    }
+    .btn.on-c2 .btn-led { background: #60a5fa; box-shadow: 0 0 12px #3b82f6, 0 0 4px #fff; }
+    .btn.on-c2 .btn-title { color: #dbeafe; text-shadow: 0 0 8px rgba(59,130,246,0.8); }
+    .btn.on-c2 .btn-sub { color: #93c5fd; }
+
+    .btn.on-amber {
+      border-color: #f59e0b;
+      background: linear-gradient(180deg, #5e3b0c 0%, #362106 100%);
+      box-shadow: inset 0 1px 0 rgba(253,230,138,0.25), 0 0 18px rgba(245,158,11,0.45);
+    }
+    .btn.on-amber .btn-led { background: #fbbf24; box-shadow: 0 0 12px #f59e0b, 0 0 4px #fff; }
+    .btn.on-amber .btn-title { color: #fef3c7; text-shadow: 0 0 8px rgba(245,158,11,0.85); }
+    .btn.on-amber .btn-sub { color: #fcd34d; }
+
+    .btn.on-c3 {
+      border-color: #ef4444;
+      background: linear-gradient(180deg, #63181e 0%, #380d11 100%);
+      box-shadow: inset 0 1px 0 rgba(252,165,165,0.25), 0 0 18px rgba(239,68,68,0.45);
+    }
+    .btn.on-c3 .btn-led { background: #f87171; box-shadow: 0 0 12px #ef4444, 0 0 4px #fff; }
+    .btn.on-c3 .btn-title { color: #fee2e2; text-shadow: 0 0 8px rgba(239,68,68,0.9); }
+    .btn.on-c3 .btn-sub { color: #fca5a5; }
+
+    .btn.on-tone {
+      border-color: #f59e0b;
+      background: linear-gradient(180deg, #5e3b0c 0%, #362106 100%);
+      box-shadow: inset 0 1px 0 rgba(253,230,138,0.25), 0 0 16px rgba(245,158,11,0.4);
+    }
+    .btn.on-tone .btn-led { background: #fbbf24; box-shadow: 0 0 12px #f59e0b, 0 0 4px #fff; }
+    .btn.on-tone .btn-title { color: #fef3c7; text-shadow: 0 0 8px rgba(245,158,11,0.8); }
+    .btn.on-tone .btn-sub { color: #fcd34d; }
+
+    .hidden { display: none !important; }
+    .chassis.dimmed .stage-grid,
+    .chassis.dimmed .tone-grid { opacity: 0.42; }
+  </style>
+</head>
+<body>
+  <div id="scale-wrap">
+    <div id="chassis" class="chassis dimmed">
+      <div class="screw tl"></div>
+      <div class="screw tr"></div>
+      <div class="screw bl"></div>
+      <div class="screw br"></div>
+
+      <div class="header">
+        <div class="nameplate">
+          <span id="brand-title" class="brand">FEDERAL SIGNAL // SMARTSIREN</span>
+          <span id="brand-sub" class="model">Digital VFD Patrol Controller</span>
+        </div>
+        <div class="status-badge">
+          <span id="status-led" class="status-led"></span>
+          <span id="status-text">OFFLINE</span>
+        </div>
+      </div>
+
+      <div id="telemetry-bay" class="telemetry-bay">
+        <div id="lightbar-front" class="lightbar-row"></div>
+        <div id="lightbar-rear" class="lightbar-row"></div>
+        <div class="oled-row">
+          <span id="oled-mode" class="oled-mode">SYS // STANDBY</span>
+          <div id="vu-meter" class="vu-meter">
+            <div class="vu-bar"></div><div class="vu-bar"></div><div class="vu-bar"></div>
+            <div class="vu-bar"></div><div class="vu-bar"></div><div class="vu-bar"></div>
+            <div class="vu-bar"></div><div class="vu-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="group-label">Slide Switch // Stage</div>
+        <div id="stage-grid" class="grid-3 stage-grid">
+          <div id="stage-1" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">STAGE 1</div>
+            <div class="btn-sub">Standby</div>
+          </div>
+          <div id="stage-2" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">STAGE 2</div>
+            <div id="stage-2-sub" class="btn-sub">Lights Only</div>
+          </div>
+          <div id="stage-3" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">STAGE 3</div>
+            <div class="btn-sub">Full Emerg</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tone-section" class="control-section">
+        <div class="group-label">Siren Control // Tone</div>
+        <div class="grid-3 tone-grid">
+          <div id="tone-1" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">TONE 1</div>
+            <div class="btn-sub">Wail</div>
+          </div>
+          <div id="tone-2" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">TONE 2</div>
+            <div class="btn-sub">Yelp</div>
+          </div>
+          <div id="tone-3" class="btn">
+            <div class="btn-led"></div>
+            <div class="btn-title">TONE 3</div>
+            <div class="btn-sub">Priority</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const FRONT_DEFAULT = ['r','r','r','r','w','w','b','b','b','b'];
+    const REAR_DEFAULT  = ['r','r','a','a','a','a','a','a','b','b'];
+
+    const PRESETS = {
+      fedsig: {
+        brand: 'FEDERAL SIGNAL // SMARTSIREN',
+        sub: 'Digital VFD Patrol Controller',
+        amberOnly: false,
+        rotary: false,
+        front: FRONT_DEFAULT,
+        rear: REAR_DEFAULT,
+        phases: [0,0,1,1,0,1,0,0,1,1],
+      },
+      interceptor: {
+        brand: 'INTERCEPTOR // NIGHT-OPS',
+        sub: 'Tactical Aviation & Pursuit Head',
+        amberOnly: false,
+        rotary: false,
+        front: FRONT_DEFAULT,
+        rear: REAR_DEFAULT,
+        phases: [0,1,0,1,0,1,0,1,0,1],
+      },
+      rotary: {
+        brand: 'CODE 3 // MX7000 ROTARY',
+        sub: 'Analog Halogen Beacon Controller',
+        amberOnly: false,
+        rotary: true,
+        front: FRONT_DEFAULT,
+        rear: REAR_DEFAULT,
+        phases: [0,1,2,3,4,4,3,2,1,0],
+      },
+      amber: {
+        brand: 'HAZARD // AMBER BEACON',
+        sub: 'DOT & Utility Warning Controller',
+        amberOnly: true,
+        rotary: false,
+        front: ['a','a','a','a','a','a','a','a','a','a'],
+        rear:  ['a','a','a','a','a','a','a','a','a','a'],
+        phases: [0,1,0,1,0,1,0,1,0,1],
+      },
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const presetKey = PRESETS[params.get('preset')] ? params.get('preset') : 'fedsig';
+    const preset = PRESETS[presetKey];
+    const autoScale = params.get('scale') !== 'fixed';
+
+    const scaleWrap = document.getElementById('scale-wrap');
+    const chassis = document.getElementById('chassis');
+    const statusLed = document.getElementById('status-led');
+    const statusText = document.getElementById('status-text');
+    const telemetryBay = document.getElementById('telemetry-bay');
+    const lightbarFront = document.getElementById('lightbar-front');
+    const lightbarRear = document.getElementById('lightbar-rear');
+    const oledMode = document.getElementById('oled-mode');
+    const vuMeter = document.getElementById('vu-meter');
+    const vuBars = Array.from(vuMeter.querySelectorAll('.vu-bar'));
+
+    chassis.classList.add(`preset-${presetKey}`);
+    document.getElementById('brand-title').textContent = preset.brand;
+    document.getElementById('brand-sub').textContent = preset.sub;
+    document.title = `ELS — ${presetKey.toUpperCase()}`;
+
+    function buildRow(container, colors) {
+      container.innerHTML = '';
+      return colors.map((color, i) => {
+        const cell = document.createElement('div');
+        cell.className = `lb-cell lb-${color}`;
+        cell.dataset.p = String(preset.phases[i]);
+        container.appendChild(cell);
+        return cell;
+      });
+    }
+
+    const frontCells = buildRow(lightbarFront, preset.front);
+    const rearCells = buildRow(lightbarRear, preset.rear);
+
+    if (preset.amberOnly) {
+      document.getElementById('stage-3').classList.add('hidden');
+      document.getElementById('tone-section').classList.add('hidden');
+      document.getElementById('stage-grid').className = 'grid-2 stage-grid';
+      document.getElementById('stage-2-sub').textContent = 'Amber Strobe';
+      vuMeter.classList.add('hidden');
+    }
+
+    function fitPanel() {
+      scaleWrap.style.transform = '';
+    }
+    window.addEventListener('resize', fitPanel);
+    fitPanel();
+
+    let lightsOn = false;
+    let sirenOn = false;
+    let currentTone = 0;
+    let frontPhase = 0;
+    let rearPhase = 0;
+    let tick = 0;
+
+    setInterval(() => {
+      tick++;
+      if (!lightsOn) {
+        for (const c of frontCells) c.classList.remove('lit');
+        for (const c of rearCells) c.classList.remove('lit');
+      } else if (preset.rotary) {
+        if (tick % 2 === 0) {
+          frontPhase = (frontPhase + 1) % 5;
+          for (const c of frontCells) c.classList.toggle('lit', Number(c.dataset.p) === frontPhase);
+        }
+        if (tick % 2 === 1 && tick % 6 !== 3) {
+          rearPhase = (rearPhase + 1) % 5;
+          for (const c of rearCells) c.classList.toggle('lit', Number(c.dataset.p) === rearPhase);
+        }
+      } else {
+        if (tick % 2 === 0) {
+          frontPhase = 1 - frontPhase;
+          for (const c of frontCells) c.classList.toggle('lit', Number(c.dataset.p) === frontPhase);
+        }
+        if (tick % 2 === 1 && tick % 6 !== 3) {
+          rearPhase = 1 - rearPhase;
+          for (const c of rearCells) c.classList.toggle('lit', Number(c.dataset.p) === rearPhase);
+        }
+      }
+
+      if (!sirenOn || preset.amberOnly) {
+        for (const b of vuBars) {
+          b.style.height = '3px';
+          b.className = 'vu-bar';
+        }
+      } else {
+        const speed = currentTone === 2 ? 0.9 : (currentTone === 3 ? 1.5 : 0.45);
+        const level = Math.round(((Math.sin(tick * speed) + 1) / 2) * vuBars.length);
+        vuBars.forEach((b, idx) => {
+          const active = idx < Math.max(2, level);
+          b.style.height = active ? `${4 + idx * 1.4}px` : '3px';
+          b.className = 'vu-bar' + (active ? (idx >= 6 ? ' peak' : ' lit') : '');
+        });
+      }
+    }, 105);
+
+    const TONE_NAMES = { 1: 'WAIL', 2: 'YELP', 3: 'PRIORITY' };
+
+    function render(state) {
+      if (!state.connected) {
+        chassis.classList.add('dimmed');
+        statusLed.className = 'status-led';
+        statusText.textContent = 'LINK LOST';
+        oledMode.textContent = 'SYS // DISCONNECTED';
+        oledMode.className = 'oled-mode';
+        lightsOn = false;
+        sirenOn = false;
+        telemetryBay.classList.remove('active');
+        return;
+      }
+
+      const visible = Boolean(state.elsVisible);
+      let code = Number(state.elsCode || 1);
+      const tone = Number(state.elsTone || 0);
+      if (preset.amberOnly && code > 2) code = 2;
+
+      chassis.classList.toggle('dimmed', !visible);
+      statusLed.className = 'status-led ' + (visible ? 'ok' : 'warn');
+      statusText.textContent = visible ? 'UNIT READY' : 'STANDBY';
+
+      lightsOn = visible && code >= 2;
+      sirenOn = !preset.amberOnly && visible && code === 3 && tone > 0;
+      currentTone = tone;
+      telemetryBay.classList.toggle('active', lightsOn);
+
+      if (!visible) {
+        oledMode.textContent = 'SYS // NO VEHICLE ELS';
+        oledMode.className = 'oled-mode';
+      } else if (code === 1) {
+        oledMode.textContent = 'MODE // STAGE 1 STANDBY';
+        oledMode.className = 'oled-mode c1';
+      } else if (code === 2) {
+        oledMode.textContent = preset.amberOnly ? 'MODE // STAGE 2 AMBER' : 'MODE // STAGE 2 LIGHTS';
+        oledMode.className = 'oled-mode c2';
+      } else {
+        oledMode.textContent = `MODE // STAGE 3 [${TONE_NAMES[tone] || 'SIREN'}]`;
+        oledMode.className = 'oled-mode c3';
+      }
+
+      for (const n of [1, 2, 3]) {
+        const el = document.getElementById(`stage-${n}`);
+        el.classList.remove('on-c1', 'on-c2', 'on-c3', 'on-amber');
+        if (visible && code === n) {
+          el.classList.add(preset.amberOnly && n === 2 ? 'on-amber' : `on-c${n}`);
+        }
+      }
+
+      for (const n of [1, 2, 3]) {
+        const el = document.getElementById(`tone-${n}`);
+        el.classList.toggle('on-tone', sirenOn && tone === n);
+      }
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/ws/els`);
+      ws.onmessage = (ev) => render(JSON.parse(ev.data));
+      ws.onclose = () => {
+        render({ connected: false });
+        setTimeout(connectWs, 1500);
+      };
+    }
+
+    connectWs();
+  </script>
+</body>
+</html>

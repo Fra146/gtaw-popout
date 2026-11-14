@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>GTAW Tactical Launcher</title>
+  <style>
+    :root {
+      --bg-root: #101216;
+      --bg-surface: #171a20;
+      --bg-card: #1d2129;
+      --bg-input: #12151a;
+      --border: #2a303c;
+      --border-hi: #3a4252;
+      --text: #eef2f7;
+      --text-muted: #8b95a5;
+      --companion-red: #d50215;
+      --companion-red-hi: #ef1a2d;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --blue: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-root);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 14px;
+      gap: 12px;
+      background: radial-gradient(circle at top right, rgba(213, 2, 21, 0.08), transparent 45%), var(--bg-root);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--companion-red), #7f000b);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(213, 2, 21, 0.35);
+    }
+
+    .brand-text h1 {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .brand-text span {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text-muted);
+    }
+
+    .status-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+
+    .status-pill.running {
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.12);
+      color: #86efac;
+    }
+
+    .status-pill.running .dot {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .status-pill.stopped {
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .status-pill.stopped .dot {
+      background: #ef4444;
+    }
+
+    .hero-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--border-hi);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text);
+      background: var(--bg-card);
+      transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease, opacity 0.12s ease;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: #252b36;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--companion-red);
+      border-color: var(--companion-red-hi);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--companion-red-hi);
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .net-grid {
+      display: grid;
+      grid-template-columns: 1fr 92px;
+      gap: 8px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .field input, .field select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 9px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      outline: none;
+    }
+
+    .field input:focus, .field select:focus {
+      border-color: var(--blue);
+    }
+
+    .meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-top: 2px;
+    }
+
+    .cdp-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+      color: #fca5a5;
+    }
+
+    .cdp-badge.ok {
+      color: #86efac;
+    }
+
+    .popout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .popout-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .popout-btn:hover:not(:disabled) {
+      background: #252b36;
+      border-color: var(--border-hi);
+    }
+
+    .popout-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .popout-btn strong {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .popout-btn span {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .els-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .els-row select {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: var(--text);
+      font-size: 11px;
+    }
+
+    .log-card {
+      flex: 1;
+      min-height: 120px;
+    }
+
+    .log-box {
+      flex: 1;
+      background: #0b0d10;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10.5px;
+      line-height: 1.45;
+      color: #b7c2d0;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+    }
+
+    .mini-btn {
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mini-btn:hover {
+      color: var(--text);
+      border-color: var(--border-hi);
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2c3340; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <div class="brand">
+        <div class="logo">GT</div>
+        <div class="brand-text">
+          <h1>GTAW Tactical</h1>
+          <span id="url-label">http://0.0.0.0:8000</span>
+        </div>
+      </div>
+      <div id="status-pill" class="status-pill stopped">
+        <span class="dot"></span>
+        <span id="status-text">Stopped</span>
+      </div>
+    </div>
+
+    <div class="hero-actions">
+      <button id="launch-gui-btn" class="btn btn-primary" disabled>Launch GUI</button>
+      <button id="toggle-btn" class="btn">Start</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>Server &amp; Bridge</span>
+        <span id="cdp-badge" class="cdp-badge">CDP: Checking...</span>
+      </div>
+      <div class="net-grid">
+        <div class="field">
+          <label for="host-input">Bind Address</label>
+          <input id="host-input" type="text" value="0.0.0.0">
+        </div>
+        <div class="field">
+          <label for="port-input">Port</label>
+          <input id="port-input" type="number" min="1024" max="65535" value="8000">
+        </div>
+      </div>
+      <div class="meta-row">
+        <span id="pid-label">PID: --</span>
+        <span id="uptime-label">Uptime: --</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Quick Popouts</span></div>
+      <div class="els-row">
+        <select id="els-preset" title="ELS Preset">
+          <option value="fedsig">ELS: SmartSiren</option>
+          <option value="interceptor">ELS: Night-Ops</option>
+          <option value="rotary">ELS: MX7000 Rotary</option>
+          <option value="amber">ELS: Amber Utility</option>
+        </select>
+        <button id="open-els-btn" class="btn" style="padding: 6px 12px; font-size: 12px;" disabled>Open ELS</button>
+      </div>
+      <div class="popout-grid">
+        <button id="open-radio-btn" class="popout-btn" disabled>
+          <strong>Radio Deck</strong>
+          <span>Channels &amp; /setslot</span>
+        </button>
+        <button id="open-comms-btn" class="popout-btn" disabled>
+          <strong>Comms Hub</strong>
+          <span>Radio &amp; Dispatch</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card log-card">
+      <div class="card-title">
+        <span>Server Log</span>
+        <button id="clear-log-btn" class="mini-btn" type="button">Clear</button>
+      </div>
+      <div id="log-box" class="log-box">Launcher ready.</div>
+    </div>
+  </div>
+
+  <script>
+    const statusPill = document.getElementById('status-pill');
+    const statusText = document.getElementById('status-text');
+    const urlLabel = document.getElementById('url-label');
+    const launchGuiBtn = document.getElementById('launch-gui-btn');
+    const toggleBtn = document.getElementById('toggle-btn');
+    const hostInput = document.getElementById('host-input');
+    const portInput = document.getElementById('port-input');
+    const cdpBadge = document.getElementById('cdp-badge');
+    const pidLabel = document.getElementById('pid-label');
+    const uptimeLabel = document.getElementById('uptime-label');
+    const elsPreset = document.getElementById('els-preset');
+    const openElsBtn = document.getElementById('open-els-btn');
+    const openRadioBtn = document.getElementById('open-radio-btn');
+    const openCommsBtn = document.getElementById('open-comms-btn');
+    const clearLogBtn = document.getElementById('clear-log-btn');
+    const logBox = document.getElementById('log-box');
+
+    let currentStatus = { running: false, host: '0.0.0.0', port: 8000, lan_ip: '127.0.0.1' };
+    let configInitialized = false;
+
+    function formatUptime(sec) {
+      if (!sec || sec < 0) return '--';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+
+    function baseUrl() {
+      const h = currentStatus.host === '0.0.0.0' ? (currentStatus.lan_ip || '127.0.0.1') : currentStatus.host;
+      return `http://${h}:${currentStatus.port}`;
+    }
+
+    async function openPanel(path) {
+      await fetch('/api/launcher/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: `${baseUrl()}${path}` })
+      });
+    }
+
+    async function refreshStatus() {
+      try {
+        const resp = await fetch('/api/launcher/status');
+        const data = await resp.json();
+        currentStatus = data;
+
+        if (!configInitialized) {
+          hostInput.value = data.host;
+          portInput.value = data.port;
+          configInitialized = true;
+        }
+
+        const running = Boolean(data.running);
+        statusPill.className = 'status-pill ' + (running ? 'running' : 'stopped');
+        statusText.textContent = running ? 'Running' : 'Stopped';
+        toggleBtn.textContent = running ? 'Stop' : 'Start';
+        hostInput.disabled = running;
+        portInput.disabled = running;
+
+        launchGuiBtn.disabled = !running;
+        openElsBtn.disabled = !running;
+        openRadioBtn.disabled = !running;
+        openCommsBtn.disabled = !running;
+
+        urlLabel.textContent = baseUrl();
+        pidLabel.textContent = `PID: ${data.pid ?? '--'}`;
+        uptimeLabel.textContent = `Uptime: ${running ? formatUptime(data.uptime) : '--'}`;
+
+        cdpBadge.textContent = data.cdp_connected ? 'CDP: Connected' : 'CDP: Waiting';
+        cdpBadge.className = 'cdp-badge' + (data.cdp_connected ? ' ok' : '');
+
+        const atBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 24;
+        const text = (data.logs || []).join('\n') || 'No server output yet.';
+        if (logBox.textContent !== text) {
+          logBox.textContent = text;
+          if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+        }
+      } catch (e) {}
+    }
+
+    toggleBtn.addEventListener('click', async () => {
+      toggleBtn.disabled = true;
+      try {
+        if (currentStatus.running) {
+          await fetch('/api/launcher/stop', { method: 'POST' });
+        } else {
+          await fetch('/api/launcher/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              host: hostInput.value.trim() || '0.0.0.0',
+              port: Number(portInput.value) || 8000
+            })
+          });
+        }
+      } finally {
+        toggleBtn.disabled = false;
+        await refreshStatus();
+      }
+    });
+
+    launchGuiBtn.addEventListener('click', () => openPanel('/'));
+    openElsBtn.addEventListener('click', () => {
+      const preset = elsPreset.value;
+      openPanel(`/els?preset=${encodeURIComponent(preset)}`);
+    });
+    openRadioBtn.addEventListener('click', () => openPanel('/radio'));
+    openCommsBtn.addEventListener('click', () => openPanel('/comms'));
+
+    clearLogBtn.addEventListener('click', async () => {
+      await fetch('/api/launcher/clear-logs', { method: 'POST' });
+      await refreshStatus();
+    });
+
+    refreshStatus();
+    setInterval(refreshStatus, 1000);
+  </script>
+</body>
+</html>
