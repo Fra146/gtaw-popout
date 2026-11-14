@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>Tactical Radio Deck</title>
+  <style>
+    :root {
+      --bg-chassis: #101318;
+      --bg-panel: #171c23;
+      --bg-card: #1d232c;
+      --bg-card-hover: #252d39;
+      --border-dim: #2b3441;
+      --border-hi: #3c485a;
+      --text-main: #e6ecf5;
+      --text-muted: #8a96a8;
+      --accent-green: #22c55e;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-blue: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-chassis);
+      color: var(--text-main);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    .deck {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 10px;
+      gap: 10px;
+      background: linear-gradient(180deg, #141920 0%, #0d1015 100%);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .unit-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-main);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--border-dim);
+      background: #12161c;
+      color: var(--text-muted);
+    }
+
+    .pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .pill.on {
+      border-color: rgba(34, 197, 94, 0.45);
+      color: #86efac;
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .pill.on .dot {
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .pill.off {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .pill.off .dot {
+      background: var(--accent-red);
+    }
+
+    .flags {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .flag {
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      border: 1px solid var(--border-dim);
+      background: #12161c;
+      color: #556070;
+    }
+
+    .flag.active {
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #7dd3fc;
+      background: rgba(56, 189, 248, 0.14);
+    }
+
+    .sync-btn {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      border: 1px solid var(--border-hi);
+      background: #1d2430;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
+    .sync-btn:hover {
+      background: #283242;
+    }
+
+    .sync-btn:active {
+      transform: translateY(1px);
+    }
+
+    .active-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #141a22;
+      border: 1px solid var(--border-dim);
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .active-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .active-channel {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffec8b;
+      letter-spacing: 0.04em;
+    }
+
+    .slots-container {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 8px;
+    }
+
+    .slot-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      padding: 9px 10px 9px 13px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 7px;
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+    }
+
+    .slot-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-hi);
+    }
+
+    .slot-card:active {
+      transform: translateY(1px);
+    }
+
+    .slot-card .color-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 7px 0 0 7px;
+      background: var(--slot-color, #FFEC8B);
+      opacity: 0.85;
+    }
+
+    .slot-card.primary {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(29, 35, 44, 0.95));
+      border-color: rgba(34, 197, 94, 0.75);
+      box-shadow: 0 0 14px rgba(34, 197, 94, 0.18);
+    }
+
+    .slot-card.primary .color-bar {
+      width: 5px;
+      opacity: 1;
+    }
+
+    .slot-card.pending {
+      border-color: var(--accent-amber);
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+
+    .slot-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .slot-num {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .slot-badges {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .badge-primary {
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      background: var(--accent-green);
+      color: #052e16;
+    }
+
+    .badge-muted {
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+    }
+
+    .slot-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--slot-color, var(--text-main));
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .slot-freq {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 160px;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+      border: 1px dashed var(--border-dim);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .empty-state small {
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="deck">
+    <div class="topbar">
+      <div class="title-group">
+        <span class="unit-title">RADIO DECK</span>
+        <span id="cdp-pill" class="pill off"><span class="dot"></span><span id="cdp-text">OFFLINE</span></span>
+        <span id="pwr-pill" class="pill off"><span class="dot"></span><span id="pwr-text">PWR OFF</span></span>
+      </div>
+      <div class="flags">
+        <span id="dep-pill" class="flag" style="display:none"></span>
+        <button id="sync-btn" class="sync-btn" type="button" title="Quickly sync radio channels">SYNC</button>
+      </div>
+    </div>
+
+    <div class="active-banner">
+      <span class="active-label">PRIMARY CHANNEL</span>
+      <span id="active-channel" class="active-channel">--</span>
+    </div>
+
+    <div class="slots-container">
+      <div id="slots-root" class="empty-state">
+        <div>Waiting for radio telemetry...</div>
+        <small>Passively listening for NUI::MinimapBar::ChatRadio without touching the game UI.</small>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let pendingSlot = null;
+    let lastState = null;
+
+    const cdpPill = document.getElementById('cdp-pill');
+    const cdpText = document.getElementById('cdp-text');
+    const pwrPill = document.getElementById('pwr-pill');
+    const pwrText = document.getElementById('pwr-text');
+    const depPill = document.getElementById('dep-pill');
+    const activeChannel = document.getElementById('active-channel');
+    const slotsRoot = document.getElementById('slots-root');
+    const syncBtn = document.getElementById('sync-btn');
+
+    syncBtn.addEventListener('click', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'sync' }));
+      }
+    });
+
+    function setPill(el, textEl, isOn, onLabel, offLabel) {
+      el.classList.toggle('on', isOn);
+      el.classList.toggle('off', !isOn);
+      textEl.textContent = isOn ? onLabel : offLabel;
+    }
+
+    function normalizeHex(hex) {
+      const clean = String(hex || '').replace(/[^0-9a-fA-F]/g, '');
+      return clean.length === 6 ? '#' + clean : '#FFEC8B';
+    }
+
+    function selectSlot(slotNum) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      pendingSlot = slotNum;
+      if (lastState) renderState(lastState);
+      ws.send(JSON.stringify({ type: 'setSlot', slot: slotNum }));
+    }
+
+    function renderState(state) {
+      lastState = state;
+      setPill(cdpPill, cdpText, Boolean(state.connected), 'CDP LINK', 'OFFLINE');
+      setPill(pwrPill, pwrText, Boolean(state.radioOn), 'PWR ON', 'PWR OFF');
+
+      const activeDep = String(state.activeDep || '');
+      if (activeDep) {
+        depPill.style.display = 'inline-block';
+        depPill.classList.add('active');
+        depPill.textContent = `DEP: ${activeDep}`;
+      } else {
+        depPill.style.display = 'none';
+        depPill.classList.remove('active');
+      }
+
+      const slots = Array.isArray(state.slots) ? state.slots : [];
+      const primarySlot = Number(state.primarySlot || 0);
+
+      if (pendingSlot !== null && primarySlot === pendingSlot) {
+        pendingSlot = null;
+      }
+
+      const active = slots.find(s => s.slot === primarySlot || s.isPrimary);
+      if (active) {
+        const label = active.localName || active.name || `Slot ${active.slot}`;
+        activeChannel.textContent = `CH ${String(active.slot).padStart(2, '0')} · ${label} (${active.frequency})`;
+        activeChannel.style.color = normalizeHex(active.color);
+      } else {
+        activeChannel.textContent = state.radioOn ? 'NO ACTIVE SLOT' : 'RADIO OFF';
+        activeChannel.style.color = '#8a96a8';
+      }
+
+      if (slots.length === 0) {
+        slotsRoot.className = 'empty-state';
+        slotsRoot.innerHTML = '<div>Waiting for radio telemetry...</div><small>Passively listening for NUI::MinimapBar::ChatRadio without touching the game UI.</small>';
+        return;
+      }
+
+      slotsRoot.className = 'slots-grid';
+      slotsRoot.innerHTML = '';
+
+      for (const s of slots) {
+        const isPrimary = s.slot === primarySlot || Boolean(s.isPrimary);
+        const isPending = pendingSlot === s.slot;
+        const color = normalizeHex(s.color);
+        const displayName = s.localName || s.name || `Channel ${s.slot}`;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slot-card' + (isPrimary ? ' primary' : '') + (isPending ? ' pending' : '');
+        btn.style.setProperty('--slot-color', color);
+        btn.title = `Switch to Slot ${s.slot}: ${displayName} (${s.frequency})`;
+        btn.addEventListener('click', () => selectSlot(s.slot));
+
+        const bar = document.createElement('span');
+        bar.className = 'color-bar';
+        btn.appendChild(bar);
+
+        const top = document.createElement('div');
+        top.className = 'slot-top';
+
+        const num = document.createElement('span');
+        num.className = 'slot-num';
+        num.textContent = `CH ${String(s.slot).padStart(2, '0')}`;
+        top.appendChild(num);
+
+        const badges = document.createElement('div');
+        badges.className = 'slot-badges';
+        if (s.muted) {
+          const m = document.createElement('span');
+          m.className = 'badge-muted';
+          m.textContent = 'MUTED';
+          badges.appendChild(m);
+        }
+        if (isPrimary) {
+          const p = document.createElement('span');
+          p.className = 'badge-primary';
+          p.textContent = 'ACTIVE';
+          badges.appendChild(p);
+        }
+        top.appendChild(badges);
+        btn.appendChild(top);
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'slot-name';
+        nameEl.textContent = displayName;
+        btn.appendChild(nameEl);
+
+        const freqEl = document.createElement('div');
+        freqEl.className = 'slot-freq';
+        freqEl.textContent = `FREQ ${s.frequency}`;
+        btn.appendChild(freqEl);
+
+        slotsRoot.appendChild(btn);
+      }
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws/radio`);
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === 'setSlotResult') {
+            if (!data.ok) {
+              pendingSlot = null;
+              if (lastState) renderState(lastState);
+            }
+            return;
+          }
+          renderState(data);
+        } catch (e) {}
+      };
+      ws.onclose = () => {
+        setPill(cdpPill, cdpText, false, 'CDP LINK', 'OFFLINE');
+        setTimeout(connectWs, 1500);
+      };
+    }
+
+    connectWs();
+  </script>
+</body>
+</html>

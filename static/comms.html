@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tactical Comms</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #080b10;
+      color: #e6edf3;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid #1d2432;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8b949e;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+    .dot.ok {
+      background: #22c55e;
+    }
+    .speakers {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .speaker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: #111620;
+      border: 1px solid transparent;
+      font-size: 13px;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .speaker.speaking {
+      background: rgba(34, 197, 94, 0.14);
+      border-color: rgba(34, 197, 94, 0.55);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .speaker-name {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .talk-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #30363d;
+    }
+    .speaker.speaking .talk-dot {
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+    }
+    .flags {
+      font-size: 11px;
+      color: #8b949e;
+    }
+    .empty {
+      padding: 16px 12px;
+      font-size: 12px;
+      color: #8b949e;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="status"><span id="conn-dot" class="dot"></span><span id="source-label">COMMS</span></span>
+    <span id="channel-label">Disconnected</span>
+  </div>
+  <div id="speakers" class="speakers">
+    <div class="empty">Waiting for voice state...</div>
+  </div>
+
+  <script>
+    const connDot = document.getElementById('conn-dot');
+    const sourceLabel = document.getElementById('source-label');
+    const channelLabel = document.getElementById('channel-label');
+    const speakersEl = document.getElementById('speakers');
+
+    function render(msg) {
+      sourceLabel.textContent = (msg.source || 'COMMS').toUpperCase();
+      connDot.className = 'dot ' + (msg.connected ? 'ok' : '');
+      channelLabel.textContent = msg.connected
+        ? (msg.channel || 'Connected')
+        : (msg.error || 'Disconnected');
+
+      const list = msg.speakers || [];
+      speakersEl.innerHTML = '';
+      if (!list.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = msg.connected ? 'No speakers in channel' : (msg.error || 'Comms offline');
+        speakersEl.appendChild(empty);
+        return;
+      }
+
+      for (const s of list) {
+        const row = document.createElement('div');
+        row.className = 'speaker' + (s.speaking ? ' speaking' : '');
+        const flags = [];
+        if (s.muted) flags.push('MUTED');
+        if (s.deafened) flags.push('DEAF');
+        row.innerHTML = `
+          <span class="speaker-name"><span class="talk-dot"></span><span></span></span>
+          <span class="flags">${flags.join(' · ')}</span>
+        `;
+        row.querySelector('.speaker-name span:last-child').textContent = s.name;
+        speakersEl.appendChild(row);
+      }
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/ws/comms`);
+      ws.onmessage = (event) => {
+        render(JSON.parse(event.data));
+      };
+      ws.onclose = () => {
+        connDot.className = 'dot';
+        channelLabel.textContent = 'Reconnecting...';
+        setTimeout(connectWs, 2000);
+      };
+    }
+
+    connectWs();
+  </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "atcradar",
+    "name": "ATC Radar",
+    "selector": "#bezel",
+    "mode": "fill",
+    "open_command": "/atcradar",
+    "launchable": true,
+    "hide_in_game": true,
+    "default_size": [1020, 700]
+  },
+  {
+    "id": "radar",
+    "name": "Police Radar",
+    "selector": "#radarFrame",
+    "mode": "fit-width",
+    "open_command": "/radar",
+    "launchable": true,
+    "hide_in_game": false,
+    "default_size": [740, 260]
+  },
+  {
+    "id": "alpr",
+    "name": "ALPR",
+    "selector": ".alpr-terminal",
+    "mode": "contain",
+    "open_command": "/alpr",
+    "launchable": true,
+    "hide_in_game": true,
+    "default_size": [520, 350]
+  },
+  {
+    "id": "speedo",
+    "name": "Speedometer",
+    "selector": ".spd-root",
+    "mode": "natural",
+    "open_command": null,
+    "launchable": false,
+    "hide_in_game": true,
+    "default_size": [340, 200]
+  }
+]

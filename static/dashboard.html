@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tactical Hub — Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0e14;
+      --panel: #131822;
+      --border: #232c3d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--panel);
+      border: 1px solid var(--border);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+    .dot.ok { background: var(--green); }
+    .dot.warn { background: var(--amber); }
+    section { margin-bottom: 28px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .card-title { font-weight: 600; font-size: 15px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: #1c2433;
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    input, select {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    label { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+    .scan-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .scan-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Second-Monitor Tactical Hub</h1>
+    </div>
+    <div class="badges">
+      <span class="badge"><span id="bridge-dot" class="dot"></span><span id="bridge-text">CDP: Checking...</span></span>
+      <select id="els-preset" title="ELS Panel Preset">
+        <option value="fedsig">ELS: SmartSiren</option>
+        <option value="interceptor">ELS: Night-Ops</option>
+        <option value="rotary">ELS: MX7000 Rotary</option>
+        <option value="amber">ELS: Amber Utility</option>
+      </select>
+      <button id="open-els-btn">ELS Panel</button>
+      <button id="open-radio-btn">Radio Panel</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>Widget Presets</h2>
+    <div id="presets-grid" class="grid"></div>
+  </section>
+
+  <section>
+    <h2>Custom Selector Launcher</h2>
+    <div class="card">
+      <div class="row">
+        <input id="custom-selector" type="text" placeholder="CSS selector (e.g. .locBar, #bezel)" style="min-width: 240px; flex: 1;" />
+        <select id="custom-mode">
+          <option value="fill">fill</option>
+          <option value="fit-width">fit-width</option>
+          <option value="contain">contain</option>
+          <option value="natural">natural</option>
+        </select>
+        <input id="custom-command" type="text" placeholder="Open command (optional)" style="min-width: 180px;" />
+        <label><input id="custom-hide" type="checkbox" checked /> Hide in game</label>
+        <button id="custom-popout-btn" class="primary">Open Popout</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+      <h2 style="margin: 0;">Active NUI Elements</h2>
+      <button id="scan-btn">Scan Active UI</button>
+    </div>
+    <div id="scan-list" class="scan-list"></div>
+  </section>
+
+  <script>
+    const presetsGrid = document.getElementById('presets-grid');
+    const bridgeDot = document.getElementById('bridge-dot');
+    const bridgeText = document.getElementById('bridge-text');
+    const scanList = document.getElementById('scan-list');
+
+    function openPopout(selector, mode, hide, canLaunch, command, size = [720, 540]) {
+      const params = new URLSearchParams({
+        selector,
+        mode: mode || 'fill',
+        hide: String(Boolean(hide)),
+        can_launch: String(Boolean(canLaunch)),
+      });
+      if (command) params.set('command', command);
+      const [w, h] = size;
+      const winName = 'tactical_' + btoa(unescape(encodeURIComponent(selector))).replace(/[^a-zA-Z0-9]/g, '');
+      window.open(
+        '/popout?' + params.toString(),
+        winName,
+        `popup=yes,width=${w},height=${h},menubar=no,toolbar=no,location=no,status=no`
+      );
+    }
+
+    async function setVisibility(selector, hideInGame) {
+      await fetch('/api/visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selector, hide_in_game: hideInGame }),
+      });
+      await refreshStatus();
+    }
+
+    async function launchCommand(selector, command) {
+      const res = await fetch('/api/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selector, command }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        console.warn('Launch result:', data);
+      }
+    }
+
+    const presetCards = new Map();
+
+    function renderPresets(status) {
+      const list = status.presets || [];
+      if (presetCards.size !== list.length || list.some((p) => !presetCards.has(p.id))) {
+        presetsGrid.innerHTML = '';
+        presetCards.clear();
+        for (const preset of list) {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <div class="card-head">
+              <span class="card-title">${preset.name}</span>
+              <span class="badge status-badge"><span class="dot"></span><span class="state-text">IDLE</span></span>
+            </div>
+            <div class="mono">${preset.selector} · ${preset.mode} · ${preset.default_size[0]}×${preset.default_size[1]}</div>
+            <div class="row">
+              <label><input type="checkbox" class="hide-toggle" ${preset.hide_in_game ? 'checked' : ''} /> Hide in game</label>
+            </div>
+            <div class="row">
+              <button class="primary popout-btn">Popout</button>
+            </div>
+          `;
+
+          card.querySelector('.hide-toggle').addEventListener('change', (e) => {
+            setVisibility(preset.selector, e.target.checked);
+          });
+          card.querySelector('.popout-btn').addEventListener('click', () => {
+            const hide = card.querySelector('.hide-toggle').checked;
+            openPopout(
+              preset.selector,
+              preset.mode,
+              hide,
+              Boolean(preset.launchable && preset.open_command),
+              preset.open_command,
+              preset.default_size
+            );
+          });
+
+          presetsGrid.appendChild(card);
+          presetCards.set(preset.id, card);
+        }
+      }
+
+      for (const preset of list) {
+        const card = presetCards.get(preset.id);
+        if (!card) continue;
+        const subs = (status.active_subscribers || {})[preset.selector] || 0;
+        const state = (status.selector_states || {})[preset.selector] || (subs > 0 ? 'STANDBY' : 'IDLE');
+        const dotClass = state === 'ACTIVE' ? 'ok' : (state === 'STANDBY' ? 'warn' : '');
+        card.querySelector('.status-badge .dot').className = 'dot ' + dotClass;
+        card.querySelector('.status-badge .state-text').textContent = `${state}${subs ? ` (${subs})` : ''}`;
+        const toggle = card.querySelector('.hide-toggle');
+        if (document.activeElement !== toggle) {
+          toggle.checked = Boolean(preset.hide_in_game);
+        }
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const status = await res.json();
+        bridgeDot.className = 'dot ' + (status.bridge_connected ? 'ok' : '');
+        bridgeText.textContent = status.bridge_connected ? 'CDP: Connected' : 'CDP: Disconnected';
+
+        renderPresets(status);
+      } catch (err) {
+        bridgeDot.className = 'dot';
+        bridgeText.textContent = 'Server Offline';
+      }
+    }
+
+    document.getElementById('scan-btn').addEventListener('click', async () => {
+      scanList.innerHTML = '<span class="mono">Scanning active NUI frames...</span>';
+      try {
+        const res = await fetch('/api/scan');
+        const data = await res.json();
+        scanList.innerHTML = '';
+        for (const el of data.elements || []) {
+          const item = document.createElement('div');
+          item.className = 'scan-item';
+          item.innerHTML = `
+            <div>
+              <div class="mono" style="color: var(--text);">${el.selector}</div>
+              <div class="mono">${el.resource} · &lt;${el.tag}&gt; · ${el.width}×${el.height}</div>
+            </div>
+            <button>Popout</button>
+          `;
+          item.querySelector('button').addEventListener('click', () => {
+            openPopout(el.selector, 'fill', true, false, null, [Math.max(360, el.width), Math.max(240, el.height)]);
+          });
+          scanList.appendChild(item);
+        }
+        if (!(data.elements || []).length) {
+          scanList.innerHTML = '<span class="mono">No visible NUI elements found.</span>';
+        }
+      } catch (err) {
+        scanList.innerHTML = '<span class="mono">Scan failed.</span>';
+      }
+    });
+
+    document.getElementById('custom-popout-btn').addEventListener('click', () => {
+      const selector = document.getElementById('custom-selector').value.trim();
+      if (!selector) return;
+      const mode = document.getElementById('custom-mode').value;
+      const command = document.getElementById('custom-command').value.trim() || null;
+      const hide = document.getElementById('custom-hide').checked;
+      openPopout(selector, mode, hide, Boolean(command), command);
+    });
+
+    document.getElementById('open-els-btn').addEventListener('click', () => {
+      const preset = document.getElementById('els-preset').value;
+      const height = preset === 'amber' ? 265 : 340;
+      window.open(`/els?preset=${encodeURIComponent(preset)}`, `tactical_els_${preset}`, `popup=yes,width=460,height=${height},menubar=no,toolbar=no,location=no,status=no`);
+    });
+
+    document.getElementById('open-radio-btn').addEventListener('click', () => {
+      window.open('/radio', 'tactical_radio_deck', 'popup=yes,width=480,height=560,menubar=no,toolbar=no,location=no,status=no');
+    });
+
+    refreshStatus();
+    setInterval(refreshStatus, 2000);
+  </script>
+</body>
+</html>
