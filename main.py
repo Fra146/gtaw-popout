@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,7 +23,7 @@ from models import (
     WidgetPreset,
 )
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 CONFIG_PATH = BASE_DIR / "config" / "presets.json"
 STATIC_DIR = BASE_DIR / "static"
 
