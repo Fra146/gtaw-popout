@@ -1,42 +1,211 @@
-"""Bitfocus Companion-style desktop launcher for GTAW Tactical Popout."""
+"""Bitfocus Companion-style PySide6 (Qt) desktop launcher for GTAW Tactical Popout."""
 
 from __future__ import annotations
 
 import argparse
 from collections import deque
-import json
-import os
+import logging
 from pathlib import Path
-import shutil
-import signal
 import socket
 import subprocess
 import sys
 import threading
 import time
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+import urllib.parse
 import urllib.request
 import webbrowser
 
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 ROOT_DIR = Path(__file__).resolve().parent
-LAUNCHER_HTML = ROOT_DIR / "static" / "launcher.html"
-UVICORN_BIN = ROOT_DIR / ".venv" / "bin" / "uvicorn"
-CHROMIUM_BIN = shutil.which("chromium") or shutil.which("google-chrome") or shutil.which("chromium-browser")
-LAUNCHER_PROFILE_DIR = Path("/tmp/gtaw-tactical-launcher-profile")
+
+QSS = """
+QWidget#Root {
+    background-color: #101216;
+    color: #eef2f7;
+    font-family: "Segoe UI", "Inter", system-ui, sans-serif;
+}
+QFrame#Card {
+    background-color: #171a20;
+    border: 1px solid #262b35;
+    border-radius: 10px;
+}
+QLabel#Logo {
+    background-color: #d50215;
+    color: #ffffff;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 800;
+}
+QLabel#BrandTitle {
+    color: #eef2f7;
+    font-size: 14px;
+    font-weight: 800;
+}
+QLabel#BrandSub {
+    color: #8b95a5;
+    font-size: 11px;
+    font-family: "Consolas", "JetBrains Mono", monospace;
+}
+QLabel#SectionTitle {
+    color: #8b95a5;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+QLabel#FieldLabel {
+    color: #8b95a5;
+    font-size: 10px;
+    font-weight: 700;
+}
+QLabel#MetaLabel {
+    color: #8b95a5;
+    font-size: 11px;
+}
+QLabel#StatusPill {
+    background-color: #12151a;
+    border: 1px solid #3f2428;
+    color: #fca5a5;
+    border-radius: 11px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+QLabel#StatusPill[running="true"] {
+    background-color: #12261a;
+    border: 1px solid #1f5c35;
+    color: #86efac;
+}
+QLabel#CdpLabel {
+    color: #fca5a5;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: "Consolas", "JetBrains Mono", monospace;
+}
+QLabel#CdpLabel[connected="true"] {
+    color: #86efac;
+}
+QLineEdit, QComboBox {
+    background-color: #12151a;
+    border: 1px solid #2a303c;
+    border-radius: 6px;
+    padding: 6px 9px;
+    color: #eef2f7;
+    font-size: 12px;
+}
+QLineEdit:focus, QComboBox:focus {
+    border: 1px solid #38bdf8;
+}
+QLineEdit:disabled {
+    color: #64748b;
+    background-color: #0e1014;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+QComboBox QAbstractItemView {
+    background-color: #171a20;
+    color: #eef2f7;
+    border: 1px solid #2a303c;
+    selection-background-color: #252b36;
+}
+QPushButton {
+    background-color: #1d2129;
+    border: 1px solid #323946;
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: #eef2f7;
+    font-size: 12px;
+    font-weight: 700;
+}
+QPushButton:hover:enabled {
+    background-color: #262c37;
+    border-color: #424b5c;
+}
+QPushButton:pressed:enabled {
+    background-color: #181c23;
+}
+QPushButton:disabled {
+    color: #5b6472;
+    border-color: #222730;
+    background-color: #15181e;
+}
+QPushButton#PrimaryBtn {
+    background-color: #d50215;
+    border: 1px solid #ef1a2d;
+    color: #ffffff;
+    font-size: 13px;
+    padding: 10px 14px;
+}
+QPushButton#PrimaryBtn:hover:enabled {
+    background-color: #ef1a2d;
+}
+QPushButton#PrimaryBtn:disabled {
+    background-color: #4a161c;
+    border-color: #5e1d24;
+    color: #9e7a7e;
+}
+QPushButton#PopoutBtn {
+    text-align: left;
+    padding: 10px 12px;
+}
+QPushButton#MiniBtn {
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 10px;
+    color: #8b95a5;
+}
+QPlainTextEdit#LogBox {
+    background-color: #0b0d10;
+    border: 1px solid #242933;
+    border-radius: 6px;
+    color: #b7c2d0;
+    font-family: "Consolas", "JetBrains Mono", monospace;
+    font-size: 11px;
+    padding: 6px;
+}
+"""
+
+
+def find_uvicorn_cmd(host: str, port: int) -> list[str]:
+    """Return the uvicorn launch command for the local venv (Windows or POSIX)."""
+    win_uv = ROOT_DIR / ".venv" / "Scripts" / "uvicorn.exe"
+    nix_uv = ROOT_DIR / ".venv" / "bin" / "uvicorn"
+    if win_uv.exists():
+        base = [str(win_uv)]
+    elif nix_uv.exists():
+        base = [str(nix_uv)]
+    else:
+        base = [sys.executable, "-m", "uvicorn"]
+    return [*base, "main:app", "--host", host, "--port", str(port)]
 
 
 class ServerController:
-    """Manages the uvicorn main:app subprocess and captures its output."""
+    """Manages the uvicorn main:app backend (subprocess in dev, in-process if frozen)."""
 
     def __init__(self, host: str = "0.0.0.0", port: int = 8000) -> None:
         self.host = host
         self.port = port
         self._lock = threading.RLock()
         self._proc: subprocess.Popen[str] | None = None
+        self._uv_server: object | None = None
         self._started_at: float | None = None
-        self._logs: deque[str] = deque(maxlen=250)
+        self._logs: deque[str] = deque(maxlen=300)
 
     def _append_log(self, line: str) -> None:
         with self._lock:
@@ -51,27 +220,60 @@ class ServerController:
 
     def is_running(self) -> bool:
         with self._lock:
-            return self._proc is not None and self._proc.poll() is None
+            if self._proc is not None:
+                return self._proc.poll() is None
+            return self._uv_server is not None
 
-    def start(self, host: str | None = None, port: int | None = None) -> dict[str, Any]:
+    def start(self, host: str | None = None, port: int | None = None) -> None:
         with self._lock:
-            if self._proc is not None and self._proc.poll() is None:
-                return {"ok": True, "already_running": True}
+            if self.is_running():
+                return
             if host:
                 self.host = host
             if port:
                 self.port = int(port)
 
-            cmd = [
-                str(UVICORN_BIN if UVICORN_BIN.exists() else sys.executable),
-                *([] if UVICORN_BIN.exists() else ["-m", "uvicorn"]),
-                "main:app",
-                "--host",
-                self.host,
-                "--port",
-                str(self.port),
-            ]
+            if getattr(sys, "frozen", False):
+                import uvicorn
+                from main import app as fastapi_app
+
+                class _ControllerLogHandler(logging.Handler):
+                    def __init__(self, append_fn) -> None:
+                        super().__init__()
+                        self._append_fn = append_fn
+
+                    def emit(self, record: logging.LogRecord) -> None:
+                        try:
+                            self._append_fn(self.format(record))
+                        except Exception:
+                            pass
+
+                handler = _ControllerLogHandler(self._append_log)
+                handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+                for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+                    lg = logging.getLogger(name)
+                    lg.handlers.clear()
+                    lg.addHandler(handler)
+                    lg.setLevel(logging.INFO)
+                    lg.propagate = False
+
+                config = uvicorn.Config(
+                    fastapi_app,
+                    host=self.host,
+                    port=self.port,
+                    log_config=None,
+                    access_log=True,
+                )
+                server = uvicorn.Server(config)
+                self._uv_server = server
+                self._started_at = time.time()
+                self._append_log(f"[launcher] starting embedded uvicorn on {self.host}:{self.port}")
+                threading.Thread(target=server.run, daemon=True).start()
+                return
+
+            cmd = find_uvicorn_cmd(self.host, self.port)
             self._append_log(f"[launcher] starting: {' '.join(cmd)}")
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             proc = subprocess.Popen(
                 cmd,
                 cwd=str(ROOT_DIR),
@@ -79,19 +281,26 @@ class ServerController:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                creationflags=creationflags,
             )
             self._proc = proc
             self._started_at = time.time()
             threading.Thread(target=self._stream_output, args=(proc,), daemon=True).start()
-            return {"ok": True, "pid": proc.pid}
 
-    def stop(self) -> dict[str, Any]:
+    def stop(self) -> None:
         with self._lock:
+            if self._uv_server is not None:
+                self._append_log("[launcher] stopping embedded server...")
+                setattr(self._uv_server, "should_exit", True)
+                self._uv_server = None
+                self._started_at = None
+                return
+
             proc = self._proc
             if proc is None or proc.poll() is not None:
                 self._proc = None
                 self._started_at = None
-                return {"ok": True, "already_stopped": True}
+                return
             self._append_log("[launcher] stopping server...")
             proc.terminate()
         try:
@@ -102,14 +311,13 @@ class ServerController:
         with self._lock:
             self._proc = None
             self._started_at = None
-        return {"ok": True}
 
     def clear_logs(self) -> None:
         with self._lock:
             self._logs.clear()
 
     @staticmethod
-    def _check_cdp() -> bool:
+    def check_cdp() -> bool:
         try:
             with urllib.request.urlopen("http://127.0.0.1:13172/json/version", timeout=0.35) as resp:
                 return resp.status == 200
@@ -117,7 +325,7 @@ class ServerController:
             return False
 
     @staticmethod
-    def _get_lan_ip() -> str:
+    def get_lan_ip() -> str:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.connect(("8.8.8.8", 80))
@@ -125,9 +333,9 @@ class ServerController:
         except Exception:
             return "127.0.0.1"
 
-    def status(self) -> dict[str, Any]:
+    def snapshot(self) -> dict[str, object]:
         with self._lock:
-            running = self._proc is not None and self._proc.poll() is None
+            running = self.is_running()
             pid = self._proc.pid if running and self._proc is not None else None
             uptime = (time.time() - self._started_at) if running and self._started_at else None
             logs = list(self._logs)
@@ -135,144 +343,316 @@ class ServerController:
             "running": running,
             "host": self.host,
             "port": self.port,
-            "lan_ip": self._get_lan_ip(),
+            "lan_ip": self.get_lan_ip(),
             "pid": pid,
             "uptime": uptime,
-            "cdp_connected": self._check_cdp(),
             "logs": logs,
         }
 
 
-def open_in_browser(url: str) -> None:
-    """Open a panel URL in the system default browser."""
-    webbrowser.open(url)
+class LauncherWindow(QWidget):
+    """Bitfocus Companion-style PySide6 desktop launcher."""
 
+    ELS_PRESETS = {
+        "ELS: SmartSiren": "fedsig",
+        "ELS: Night-Ops": "interceptor",
+        "ELS: MX7000 Rotary": "rotary",
+        "ELS: Amber Utility": "amber",
+    }
 
-def make_handler(controller: ServerController) -> type[BaseHTTPRequestHandler]:
-    class LauncherHandler(BaseHTTPRequestHandler):
-        def log_message(self, format: str, *args: Any) -> None:
-            return
+    def __init__(self, controller: ServerController, autostart: bool = True) -> None:
+        super().__init__()
+        self.controller = controller
+        self._cdp_ok = False
+        self._last_log_text = ""
 
-        def _send_json(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
-            body = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+        self.setObjectName("Root")
+        self.setWindowTitle("GTAW Tactical Launcher")
+        self.resize(450, 650)
+        self.setMinimumSize(410, 560)
 
-        def _read_json(self) -> dict[str, Any]:
-            length = int(self.headers.get("Content-Length", "0") or 0)
-            if length <= 0:
-                return {}
-            raw = self.rfile.read(length)
+        self._build_ui()
+
+        if autostart:
+            self.controller.start()
+
+        threading.Thread(target=self._cdp_poll_loop, daemon=True).start()
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._refresh_ui)
+        self._timer.start(400)
+        self._refresh_ui()
+
+    def _make_card(self) -> QFrame:
+        card = QFrame()
+        card.setObjectName("Card")
+        return card
+
+    def _build_ui(self) -> None:
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(14, 14, 14, 14)
+        root_layout.setSpacing(10)
+
+        # Header card
+        header = self._make_card()
+        h_lay = QHBoxLayout(header)
+        h_lay.setContentsMargins(12, 10, 12, 10)
+        h_lay.setSpacing(10)
+
+        logo = QLabel("GT")
+        logo.setObjectName("Logo")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setFixedSize(36, 36)
+        h_lay.addWidget(logo)
+
+        brand_lay = QVBoxLayout()
+        brand_lay.setSpacing(1)
+        title = QLabel("GTAW Tactical")
+        title.setObjectName("BrandTitle")
+        self.url_label = QLabel(f"http://{self.controller.get_lan_ip()}:{self.controller.port}")
+        self.url_label.setObjectName("BrandSub")
+        brand_lay.addWidget(title)
+        brand_lay.addWidget(self.url_label)
+        h_lay.addLayout(brand_lay, 1)
+
+        self.status_pill = QLabel("● Stopped")
+        self.status_pill.setObjectName("StatusPill")
+        self.status_pill.setProperty("running", False)
+        h_lay.addWidget(self.status_pill)
+        root_layout.addWidget(header)
+
+        # Hero actions
+        hero_lay = QHBoxLayout()
+        hero_lay.setSpacing(8)
+        self.launch_btn = QPushButton("Launch GUI")
+        self.launch_btn.setObjectName("PrimaryBtn")
+        self.launch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.launch_btn.clicked.connect(lambda: self._open_path("/"))
+
+        self.toggle_btn = QPushButton("Start")
+        self.toggle_btn.setFixedWidth(96)
+        self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_btn.clicked.connect(self._toggle_server)
+
+        hero_lay.addWidget(self.launch_btn, 1)
+        hero_lay.addWidget(self.toggle_btn)
+        root_layout.addLayout(hero_lay)
+
+        # Server & Bridge card
+        net_card = self._make_card()
+        net_lay = QVBoxLayout(net_card)
+        net_lay.setContentsMargins(12, 10, 12, 10)
+        net_lay.setSpacing(8)
+
+        net_top = QHBoxLayout()
+        net_title = QLabel("SERVER & BRIDGE")
+        net_title.setObjectName("SectionTitle")
+        self.cdp_label = QLabel("CDP: Checking...")
+        self.cdp_label.setObjectName("CdpLabel")
+        self.cdp_label.setProperty("connected", False)
+        net_top.addWidget(net_title)
+        net_top.addStretch(1)
+        net_top.addWidget(self.cdp_label)
+        net_lay.addLayout(net_top)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(4)
+        grid.setColumnStretch(0, 1)
+
+        lbl_host = QLabel("BIND ADDRESS")
+        lbl_host.setObjectName("FieldLabel")
+        lbl_port = QLabel("PORT")
+        lbl_port.setObjectName("FieldLabel")
+        self.host_input = QLineEdit(self.controller.host)
+        self.host_input.setFont(QFont("Consolas", 10))
+        self.port_input = QLineEdit(str(self.controller.port))
+        self.port_input.setFont(QFont("Consolas", 10))
+        self.port_input.setFixedWidth(90)
+
+        grid.addWidget(lbl_host, 0, 0)
+        grid.addWidget(lbl_port, 0, 1)
+        grid.addWidget(self.host_input, 1, 0)
+        grid.addWidget(self.port_input, 1, 1)
+        net_lay.addLayout(grid)
+
+        meta_lay = QHBoxLayout()
+        self.pid_label = QLabel("PID: --")
+        self.pid_label.setObjectName("MetaLabel")
+        self.uptime_label = QLabel("Uptime: --")
+        self.uptime_label.setObjectName("MetaLabel")
+        meta_lay.addWidget(self.pid_label)
+        meta_lay.addStretch(1)
+        meta_lay.addWidget(self.uptime_label)
+        net_lay.addLayout(meta_lay)
+        root_layout.addWidget(net_card)
+
+        # Quick Popouts card
+        pop_card = self._make_card()
+        pop_lay = QVBoxLayout(pop_card)
+        pop_lay.setContentsMargins(12, 10, 12, 10)
+        pop_lay.setSpacing(8)
+
+        pop_title = QLabel("QUICK POPOUTS (DEFAULT BROWSER)")
+        pop_title.setObjectName("SectionTitle")
+        pop_lay.addWidget(pop_title)
+
+        els_row = QHBoxLayout()
+        els_row.setSpacing(8)
+        self.els_combo = QComboBox()
+        self.els_combo.addItems(list(self.ELS_PRESETS.keys()))
+        self.els_btn = QPushButton("Open ELS")
+        self.els_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.els_btn.clicked.connect(self._open_els)
+        els_row.addWidget(self.els_combo, 1)
+        els_row.addWidget(self.els_btn)
+        pop_lay.addLayout(els_row)
+
+        pop_btns = QHBoxLayout()
+        pop_btns.setSpacing(8)
+        self.radio_btn = QPushButton("Radio Deck\nChannels & /setslot")
+        self.radio_btn.setObjectName("PopoutBtn")
+        self.radio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.radio_btn.clicked.connect(lambda: self._open_path("/radio"))
+
+        self.comms_btn = QPushButton("Comms Hub\nRadio & Dispatch")
+        self.comms_btn.setObjectName("PopoutBtn")
+        self.comms_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.comms_btn.clicked.connect(lambda: self._open_path("/comms"))
+
+        pop_btns.addWidget(self.radio_btn, 1)
+        pop_btns.addWidget(self.comms_btn, 1)
+        pop_lay.addLayout(pop_btns)
+        root_layout.addWidget(pop_card)
+
+        # Server Log card
+        log_card = self._make_card()
+        log_lay = QVBoxLayout(log_card)
+        log_lay.setContentsMargins(12, 10, 12, 10)
+        log_lay.setSpacing(6)
+
+        log_top = QHBoxLayout()
+        log_title = QLabel("SERVER LOG")
+        log_title.setObjectName("SectionTitle")
+        clear_btn = QPushButton("Clear")
+        clear_btn.setObjectName("MiniBtn")
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_btn.clicked.connect(self._clear_logs)
+        log_top.addWidget(log_title)
+        log_top.addStretch(1)
+        log_top.addWidget(clear_btn)
+        log_lay.addLayout(log_top)
+
+        self.log_box = QPlainTextEdit()
+        self.log_box.setObjectName("LogBox")
+        self.log_box.setReadOnly(True)
+        log_lay.addWidget(self.log_box, 1)
+        root_layout.addWidget(log_card, 1)
+
+    def _base_url(self, snap: dict[str, object]) -> str:
+        host = str(snap["host"])
+        shown_host = str(snap["lan_ip"]) if host == "0.0.0.0" else host
+        return f"http://{shown_host}:{snap['port']}"
+
+    def _open_path(self, path: str) -> None:
+        snap = self.controller.snapshot()
+        webbrowser.open(f"{self._base_url(snap)}{path}")
+
+    def _open_els(self) -> None:
+        preset = self.ELS_PRESETS.get(self.els_combo.currentText(), "fedsig")
+        self._open_path(f"/els?preset={urllib.parse.quote(preset)}")
+
+    def _toggle_server(self) -> None:
+        if self.controller.is_running():
+            self.controller.stop()
+        else:
+            host = self.host_input.text().strip() or "0.0.0.0"
             try:
-                data = json.loads(raw.decode("utf-8"))
-                return data if isinstance(data, dict) else {}
-            except Exception:
-                return {}
+                port = int(self.port_input.text().strip() or "8000")
+            except ValueError:
+                port = 8000
+                self.port_input.setText("8000")
+            self.controller.start(host=host, port=port)
+        self._refresh_ui()
 
-        def do_GET(self) -> None:
-            if self.path == "/" or self.path == "/launcher":
-                html = LAUNCHER_HTML.read_bytes()
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(html)))
-                self.end_headers()
-                self.wfile.write(html)
-                return
-            if self.path == "/api/launcher/status":
-                self._send_json(controller.status())
-                return
-            self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+    def _clear_logs(self) -> None:
+        self.controller.clear_logs()
+        self._refresh_ui()
 
-        def do_POST(self) -> None:
-            if self.path == "/api/launcher/start":
-                body = self._read_json()
-                res = controller.start(
-                    host=str(body.get("host") or controller.host),
-                    port=int(body.get("port") or controller.port),
-                )
-                self._send_json(res)
-                return
-            if self.path == "/api/launcher/stop":
-                self._send_json(controller.stop())
-                return
-            if self.path == "/api/launcher/clear-logs":
-                controller.clear_logs()
-                self._send_json({"ok": True})
-                return
-            if self.path == "/api/launcher/open":
-                body = self._read_json()
-                url = str(body.get("url") or "")
-                if url.startswith(("http://", "https://")):
-                    open_in_browser(url)
-                    self._send_json({"ok": True})
-                else:
-                    self._send_json({"ok": False, "error": "Invalid URL"}, status=HTTPStatus.BAD_REQUEST)
-                return
-            self._send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+    def _cdp_poll_loop(self) -> None:
+        while True:
+            self._cdp_ok = self.controller.check_cdp()
+            time.sleep(1.5)
 
-    return LauncherHandler
+    @staticmethod
+    def _format_uptime(sec: object) -> str:
+        if not isinstance(sec, (int, float)) or sec < 0:
+            return "--"
+        total = int(sec)
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        if h:
+            return f"{h}h {m}m {s}s"
+        if m:
+            return f"{m}m {s}s"
+        return f"{s}s"
+
+    def _repolish(self, widget: QWidget) -> None:
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
+
+    def _refresh_ui(self) -> None:
+        snap = self.controller.snapshot()
+        running = bool(snap["running"])
+
+        self.url_label.setText(self._base_url(snap))
+
+        self.status_pill.setText("● Running" if running else "● Stopped")
+        if self.status_pill.property("running") != running:
+            self.status_pill.setProperty("running", running)
+            self._repolish(self.status_pill)
+
+        self.toggle_btn.setText("Stop" if running else "Start")
+        self.host_input.setEnabled(not running)
+        self.port_input.setEnabled(not running)
+
+        for btn in (self.launch_btn, self.els_btn, self.radio_btn, self.comms_btn):
+            btn.setEnabled(running)
+
+        self.pid_label.setText(f"PID: {snap['pid'] if snap['pid'] else '--'}")
+        self.uptime_label.setText(f"Uptime: {self._format_uptime(snap['uptime']) if running else '--'}")
+
+        self.cdp_label.setText("CDP: Connected" if self._cdp_ok else "CDP: Waiting")
+        if self.cdp_label.property("connected") != self._cdp_ok:
+            self.cdp_label.setProperty("connected", self._cdp_ok)
+            self._repolish(self.cdp_label)
+
+        logs = snap["logs"]
+        log_text = "\n".join(logs) if isinstance(logs, list) and logs else "Launcher ready."
+        if log_text != self._last_log_text:
+            self._last_log_text = log_text
+            self.log_box.setPlainText(log_text)
+            sb = self.log_box.verticalScrollBar()
+            sb.setValue(sb.maximum())
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.controller.stop()
+        super().closeEvent(event)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="GTAW Tactical Companion-style Launcher")
+    parser = argparse.ArgumentParser(description="GTAW Tactical Companion-style Qt Launcher")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-autostart", action="store_true")
-    parser.add_argument("--no-gui", action="store_true")
     args = parser.parse_args()
 
+    app = QApplication(sys.argv)
+    app.setStyleSheet(QSS)
     controller = ServerController(host=args.host, port=args.port)
-    if not args.no_autostart:
-        controller.start()
-
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(controller))
-    launcher_port = httpd.server_address[1]
-    launcher_url = f"http://127.0.0.1:{launcher_port}/"
-
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-
-    def _shutdown(*_: Any) -> None:
-        controller.stop()
-        httpd.shutdown()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
-
-    if args.no_gui:
-        print(f"Launcher UI: {launcher_url}", flush=True)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            _shutdown()
-    elif CHROMIUM_BIN:
-        LAUNCHER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-        gui_proc = subprocess.Popen(
-            [
-                CHROMIUM_BIN,
-                f"--app={launcher_url}",
-                "--window-size=460,680",
-                f"--user-data-dir={LAUNCHER_PROFILE_DIR}",
-                "--class=GTAW-Tactical-Launcher",
-                "--no-first-run",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        gui_proc.wait()
-        controller.stop()
-        httpd.shutdown()
-    else:
-        webbrowser.open(launcher_url)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            _shutdown()
+    win = LauncherWindow(controller, autostart=not args.no_autostart)
+    win.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
