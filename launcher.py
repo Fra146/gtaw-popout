@@ -13,6 +13,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -673,26 +674,39 @@ class LauncherWindow(QWidget):
             new_exe.write_bytes(data)
             self.controller.stop()
 
-            new_s = str(new_exe).replace("'", "''")
-            cur_s = str(cur_exe).replace("'", "''")
-            ps_cmd = (
-                f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue; "
-                f"for ($i = 0; $i -lt 15; $i++) {{ "
-                f"  try {{ Move-Item -Force '{new_s}' '{cur_s}'; break }} "
-                f"  catch {{ Start-Sleep -Milliseconds 300 }} "
-                f"}}; "
-                f"Start-Process '{cur_s}'"
+            bat_path = Path(tempfile.gettempdir()) / f"gtaw_update_{os.getpid()}.bat"
+            bat_content = (
+                "@echo off\r\n"
+                "setlocal\r\n"
+                "set /a tries=0\r\n"
+                ":retry\r\n"
+                "ping -n 2 127.0.0.1 >nul\r\n"
+                f'move /y "{new_exe}" "{cur_exe}" >nul 2>&1\r\n'
+                "if errorlevel 1 (\r\n"
+                "  set /a tries+=1\r\n"
+                "  if %tries% lss 20 goto retry\r\n"
+                "  exit /b 1\r\n"
+                ")\r\n"
+                f'start "" "{cur_exe}"\r\n'
+                'del "%~f0" >nul 2>&1\r\n'
             )
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+            bat_path.write_text(bat_content, encoding="utf-8")
+
+            flags = (
+                getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                | getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            )
             clean_env = {
                 k: v
                 for k, v in os.environ.items()
                 if not k.startswith(("_MEI", "_PYI", "QT_", "QML", "PYTHON"))
             }
             subprocess.Popen(
-                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                ["cmd.exe", "/c", str(bat_path)],
                 creationflags=flags,
                 env=clean_env,
+                close_fds=True,
             )
             self._update_ready.emit()
         except Exception as exc:
