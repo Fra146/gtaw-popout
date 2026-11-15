@@ -125,6 +125,7 @@
       </select>
       <button id="open-els-btn">ELS Panel</button>
       <button id="open-radio-btn">Radio Panel</button>
+      <button id="open-deck-btn">Tactical Deck</button>
     </div>
   </header>
 
@@ -322,6 +323,10 @@
 
     document.getElementById('open-radio-btn').addEventListener('click', () => {
       window.open('/radio', 'tactical_radio_deck', 'popup=yes,width=480,height=560,menubar=no,toolbar=no,location=no,status=no');
+    });
+
+    document.getElementById('open-deck-btn').addEventListener('click', () => {
+      window.location.href = '/deck';
     });
 
     refreshStatus();

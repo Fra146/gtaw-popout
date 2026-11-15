@@ -357,6 +357,7 @@
     let ws = null;
     let pendingSlot = null;
     let lastState = null;
+    const showDep = new URLSearchParams(location.search).get('show_dep') !== 'false';
 
     const cdpPill = document.getElementById('cdp-pill');
     const cdpText = document.getElementById('cdp-text');
@@ -397,7 +398,7 @@
       setPill(pwrPill, pwrText, Boolean(state.radioOn), 'PWR ON', 'PWR OFF');
 
       const activeDep = String(state.activeDep || '');
-      if (activeDep) {
+      if (showDep && activeDep) {
         depPill.style.display = 'inline-block';
         depPill.classList.add('active');
         depPill.textContent = `DEP: ${activeDep}`;
@@ -512,5 +513,7 @@
 
     connectWs();
   </script>
+  <script src="/static/widget-gear.js"></script>
+  <script>window.WidgetGear?.mountStandaloneGear('radio');</script>
 </body>
 </html>

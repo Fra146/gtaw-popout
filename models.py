@@ -1,6 +1,6 @@
 """Pydantic schemas for the Second-Monitor Tactical Hub."""
 
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -70,3 +70,25 @@ class CommsConnectRequest(BaseModel):
     api_key: str | None = None
     host: str = "127.0.0.1"
     port: int = 25639
+
+
+class DeckWidgetConfig(BaseModel):
+    """Single widget slot inside a composable /deck layout."""
+
+    type: Literal["els", "radio", "comms", "popout"]
+    title: str | None = None
+    span: Literal[1, 2] = 1
+    height: int = 320
+    visible: bool = True
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeckLayout(BaseModel):
+    """Saved or built-in multi-device layout preset for /deck."""
+
+    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    name: str = Field(..., min_length=1, max_length=64)
+    columns: Literal["auto", "1", "2", "3"] = "auto"
+    density: Literal["compact", "normal", "touch"] = "normal"
+    widgets: list[DeckWidgetConfig] = Field(default_factory=list)
+    builtin: bool = False

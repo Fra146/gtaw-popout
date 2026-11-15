@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -18,14 +18,94 @@ from bridges.radio import RadioBridge
 from models import (
     CommsConnectRequest,
     CommsStateMessage,
+    DeckLayout,
+    DeckWidgetConfig,
     LaunchRequest,
     VisibilityRequest,
     WidgetPreset,
 )
 
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+DATA_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else BASE_DIR
 CONFIG_PATH = BASE_DIR / "config" / "presets.json"
+LAYOUTS_PATH = DATA_DIR / "layouts.json"
 STATIC_DIR = BASE_DIR / "static"
+
+BUILTIN_DECK_PRESETS: list[DeckLayout] = [
+    DeckLayout(
+        id="patrol-vertical",
+        name="Vertical Monitor (Patrol)",
+        columns="1",
+        density="normal",
+        builtin=True,
+        widgets=[
+            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=340, visible=True, params={"preset": "interceptor"}),
+            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=440, visible=True, params={"show_dep": True}),
+            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=260, visible=True, params={}),
+        ],
+    ),
+    DeckLayout(
+        id="ipad-mdt",
+        name="iPad / Landscape MDT",
+        columns="2",
+        density="touch",
+        builtin=True,
+        widgets=[
+            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=350, visible=True, params={"preset": "fedsig"}),
+            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=350, visible=True, params={"show_dep": True}),
+            DeckWidgetConfig(type="comms", title="Comms Hub", span=2, height=260, visible=True, params={}),
+        ],
+    ),
+    DeckLayout(
+        id="phone-touch",
+        name="Phone / Compact Touch",
+        columns="1",
+        density="touch",
+        builtin=True,
+        widgets=[
+            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=460, visible=True, params={"show_dep": True}),
+            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=340, visible=True, params={"preset": "fedsig"}),
+            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=240, visible=False, params={}),
+        ],
+    ),
+    DeckLayout(
+        id="amber-utility",
+        name="Amber Utility / DOT",
+        columns="1",
+        density="normal",
+        builtin=True,
+        widgets=[
+            DeckWidgetConfig(type="els", title="Amber ELS", span=1, height=265, visible=True, params={"preset": "amber"}),
+            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=460, visible=True, params={"show_dep": True}),
+            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=240, visible=False, params={}),
+        ],
+    ),
+]
+BUILTIN_IDS = {p.id for p in BUILTIN_DECK_PRESETS}
+
+
+def load_custom_layouts() -> list[DeckLayout]:
+    """Load user-saved custom deck layouts from layouts.json next to the executable."""
+    if not LAYOUTS_PATH.exists():
+        return []
+    try:
+        raw = json.loads(LAYOUTS_PATH.read_text(encoding="utf-8"))
+        if not isinstance(raw, list):
+            return []
+        out: list[DeckLayout] = []
+        for item in raw:
+            layout = DeckLayout.model_validate({**item, "builtin": False})
+            if layout.id not in BUILTIN_IDS:
+                out.append(layout)
+        return out
+    except Exception:
+        return []
+
+
+def save_custom_layouts(layouts: list[DeckLayout]) -> None:
+    """Persist custom deck layouts to layouts.json next to the executable."""
+    payload = [l.model_dump(exclude={"builtin"}) for l in layouts]
+    LAYOUTS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def load_presets() -> list[WidgetPreset]:
@@ -40,6 +120,7 @@ presets: list[WidgetPreset] = load_presets()
 bridge = RadioBridge()
 
 nui_subscribers: dict[str, set[WebSocket]] = {}
+nui_subscriber_hide: dict[WebSocket, bool] = {}
 comms_subscribers: set[WebSocket] = set()
 els_subscribers: set[WebSocket] = set()
 radio_subscribers: set[WebSocket] = set()
@@ -50,8 +131,17 @@ els_last_payload: str = ""
 radio_last_payload: str = ""
 
 
+def _effective_hide_in_game(selector: str) -> bool:
+    """Hide in FiveM if at least one active subscriber requests hide_in_game."""
+    subs = nui_subscribers.get(selector)
+    if subs:
+        return any(nui_subscriber_hide.get(ws, False) for ws in subs)
+    return selector_hide_in_game.get(selector, True)
+
+
 async def _remove_nui_subscriber(selector: str, ws: WebSocket) -> None:
-    """Remove a WebSocket subscriber and restore in-game UI when count hits 0."""
+    """Remove a WebSocket subscriber and restore in-game UI when no viewer wants it hidden."""
+    nui_subscriber_hide.pop(ws, None)
     subs = nui_subscribers.get(selector)
     if subs is not None:
         subs.discard(ws)
@@ -59,6 +149,8 @@ async def _remove_nui_subscriber(selector: str, ws: WebSocket) -> None:
             nui_subscribers.pop(selector, None)
             selector_states.pop(selector, None)
             selector_last_poll.pop(selector, None)
+            await bridge.clear_hide_override(selector)
+        elif not _effective_hide_in_game(selector):
             await bridge.clear_hide_override(selector)
 
 
@@ -83,7 +175,7 @@ async def _nui_stream_loop() -> None:
                 continue
 
             selector_last_poll[selector] = now
-            hide = selector_hide_in_game.get(selector, True)
+            hide = _effective_hide_in_game(selector)
             msg = await bridge.extract_selector(selector, hide_in_game=hide)
             if not nui_subscribers.get(selector):
                 await bridge.clear_hide_override(selector)
@@ -219,6 +311,125 @@ async def get_radio() -> FileResponse:
     return FileResponse(STATIC_DIR / "radio.html")
 
 
+@app.get("/deck")
+async def get_deck() -> FileResponse:
+    return FileResponse(STATIC_DIR / "deck.html")
+
+
+@app.get("/api/widgets")
+async def api_widget_schemas() -> dict[str, Any]:
+    """Return known widget types and their customizable parameter schemas."""
+    popout_options = [
+        {"value": p.selector, "label": p.name, "mode": p.mode, "hide": p.hide_in_game}
+        for p in presets
+    ]
+    default_selector = popout_options[0]["value"] if popout_options else ""
+    return {
+        "els": {
+            "label": "ELS Controller",
+            "path": "/els",
+            "defaultHeight": 340,
+            "params": [
+                {
+                    "key": "preset",
+                    "label": "ELS Preset",
+                    "type": "select",
+                    "default": "fedsig",
+                    "options": [
+                        {"value": "fedsig", "label": "SmartSiren"},
+                        {"value": "interceptor", "label": "Night-Ops"},
+                        {"value": "rotary", "label": "MX7000 Rotary"},
+                        {"value": "amber", "label": "Amber Utility"},
+                    ],
+                },
+            ],
+        },
+        "radio": {
+            "label": "Radio Deck",
+            "path": "/radio",
+            "defaultHeight": 440,
+            "params": [
+                {
+                    "key": "show_dep",
+                    "label": "Show DEP Pill",
+                    "type": "boolean",
+                    "default": True,
+                },
+            ],
+        },
+        "comms": {
+            "label": "Comms Hub",
+            "path": "/comms",
+            "defaultHeight": 260,
+            "params": [],
+        },
+        "popout": {
+            "label": "NUI Popout",
+            "path": "/popout",
+            "defaultHeight": 320,
+            "params": [
+                {
+                    "key": "selector",
+                    "label": "NUI Widget",
+                    "type": "select",
+                    "default": default_selector,
+                    "options": popout_options,
+                },
+                {
+                    "key": "mode",
+                    "label": "Scale Mode",
+                    "type": "select",
+                    "default": "fill",
+                    "options": [
+                        {"value": "fill", "label": "Fill"},
+                        {"value": "fit-width", "label": "Fit Width"},
+                        {"value": "contain", "label": "Contain"},
+                        {"value": "natural", "label": "Natural"},
+                    ],
+                },
+                {
+                    "key": "hide",
+                    "label": "Hide in FiveM",
+                    "type": "boolean",
+                    "default": True,
+                },
+            ],
+        },
+    }
+
+
+@app.get("/api/layouts")
+async def api_list_layouts() -> dict[str, Any]:
+    return {
+        "builtin": [p.model_dump() for p in BUILTIN_DECK_PRESETS],
+        "custom": [l.model_dump() for l in load_custom_layouts()],
+    }
+
+
+@app.post("/api/layouts")
+async def api_save_layout(layout: DeckLayout) -> dict[str, Any]:
+    if layout.id in BUILTIN_IDS:
+        raise HTTPException(status_code=400, detail="Cannot overwrite a built-in preset ID; save under a new ID.")
+    clean = layout.model_copy(update={"builtin": False})
+    existing = load_custom_layouts()
+    updated = [l for l in existing if l.id != clean.id]
+    updated.append(clean)
+    save_custom_layouts(updated)
+    return {"ok": True, "layout": clean.model_dump()}
+
+
+@app.delete("/api/layouts/{layout_id}")
+async def api_delete_layout(layout_id: str) -> dict[str, Any]:
+    if layout_id in BUILTIN_IDS:
+        raise HTTPException(status_code=400, detail="Cannot delete a built-in preset.")
+    existing = load_custom_layouts()
+    filtered = [l for l in existing if l.id != layout_id]
+    if len(filtered) == len(existing):
+        raise HTTPException(status_code=404, detail="Custom layout not found.")
+    save_custom_layouts(filtered)
+    return {"ok": True}
+
+
 @app.get("/api/status")
 async def api_status() -> dict[str, Any]:
     live_presets = [
@@ -294,7 +505,8 @@ async def ws_nui(
 ) -> None:
     await websocket.accept()
     nui_subscribers.setdefault(selector, set()).add(websocket)
-    selector_hide_in_game[selector] = hide
+    nui_subscriber_hide[websocket] = hide
+    selector_hide_in_game[selector] = _effective_hide_in_game(selector)
     try:
         while True:
             raw = await websocket.receive_text()

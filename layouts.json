@@ -1,0 +1,50 @@
+[
+  {
+    "id": "patrol-vertical-custom",
+    "name": "Vertical Monitor (Patrol) (Custom)",
+    "columns": "1",
+    "density": "normal",
+    "widgets": [
+      {
+        "type": "els",
+        "title": "ELS Controller",
+        "span": 1,
+        "height": 340,
+        "visible": true,
+        "params": {
+          "preset": "fedsig"
+        }
+      },
+      {
+        "type": "radio",
+        "title": "Radio Deck",
+        "span": 1,
+        "height": 440,
+        "visible": true,
+        "params": {
+          "show_dep": true
+        }
+      },
+      {
+        "type": "comms",
+        "title": "Comms Hub",
+        "span": 1,
+        "height": 260,
+        "visible": true,
+        "params": {}
+      },
+      {
+        "type": "popout",
+        "title": "ALPR",
+        "span": 1,
+        "height": 320,
+        "visible": true,
+        "params": {
+          "selector": ".alpr-terminal",
+          "mode": "fill",
+          "hide": true
+        }
+      }
+    ]
+  }
+]
