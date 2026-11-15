@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import hashlib
+import json
 import logging
+import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
@@ -14,6 +18,15 @@ import time
 import urllib.parse
 import urllib.request
 import webbrowser
+
+try:
+    from version import APP_VERSION
+except Exception:
+    APP_VERSION = "0.2.0"
+
+GITHUB_REPO = "Fra146/gtaw-popout"
+EXE_ASSET_NAME = "GTAW-Tactical-Launcher.exe"
+SHA_ASSET_NAME = "GTAW-Tactical-Launcher.exe.sha256"
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont
@@ -170,6 +183,19 @@ QPushButton#MiniBtn {
     font-size: 10px;
     color: #8b95a5;
 }
+QPushButton#UpdateBtn {
+    background-color: #132538;
+    border: 1px solid #2563eb;
+    color: #93c5fd;
+    border-radius: 11px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+}
+QPushButton#UpdateBtn:hover:enabled {
+    background-color: #1d3a59;
+    color: #dbeafe;
+}
 QPlainTextEdit#LogBox {
     background-color: #0b0d10;
     border: 1px solid #242933;
@@ -180,6 +206,60 @@ QPlainTextEdit#LogBox {
     padding: 6px;
 }
 """
+
+
+def parse_semver(tag: str) -> tuple[int, ...] | None:
+    """Parse 'v0.2' or '0.2.1' into a comparable integer tuple, or None if non-semver."""
+    m = re.fullmatch(r"v?(\d+(?:\.\d+)*)", tag.strip())
+    if not m:
+        return None
+    parts = [int(p) for p in m.group(1).split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
+def check_for_update() -> dict[str, str] | None:
+    """Check GitHub Releases for a newer tagged semver release."""
+    cur_ver = parse_semver(APP_VERSION)
+    if cur_ver is None:
+        return None
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=10",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "GTAW-Tactical-Launcher",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            releases = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(releases, list):
+        return None
+
+    best: tuple[tuple[int, ...], dict[str, str]] | None = None
+    for rel in releases:
+        if rel.get("draft") or rel.get("prerelease"):
+            continue
+        tag = str(rel.get("tag_name") or "")
+        ver = parse_semver(tag)
+        if ver is None or ver <= cur_ver:
+            continue
+        assets = {str(a.get("name")): str(a.get("browser_download_url")) for a in rel.get("assets", [])}
+        exe_url = assets.get(EXE_ASSET_NAME)
+        if not exe_url:
+            continue
+        info = {
+            "tag": tag,
+            "html_url": str(rel.get("html_url") or ""),
+            "exe_url": exe_url,
+            "sha_url": assets.get(SHA_ASSET_NAME, ""),
+        }
+        if best is None or ver > best[0]:
+            best = (ver, info)
+    return best[1] if best else None
 
 
 def find_uvicorn_cmd(host: str, port: int) -> list[str]:
@@ -365,6 +445,8 @@ class LauncherWindow(QWidget):
         self.controller = controller
         self._cdp_ok = False
         self._last_log_text = ""
+        self._update_info: dict[str, str] | None = None
+        self._updating = False
 
         self.setObjectName("Root")
         self.setWindowTitle("GTAW Tactical Launcher")
@@ -377,6 +459,7 @@ class LauncherWindow(QWidget):
             self.controller.start()
 
         threading.Thread(target=self._cdp_poll_loop, daemon=True).start()
+        threading.Thread(target=self._update_check_worker, daemon=True).start()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh_ui)
@@ -407,13 +490,20 @@ class LauncherWindow(QWidget):
 
         brand_lay = QVBoxLayout()
         brand_lay.setSpacing(1)
-        title = QLabel("GTAW Tactical")
+        title = QLabel(f"GTAW Tactical  v{APP_VERSION}")
         title.setObjectName("BrandTitle")
         self.url_label = QLabel(f"http://{self.controller.get_lan_ip()}:{self.controller.port}")
         self.url_label.setObjectName("BrandSub")
         brand_lay.addWidget(title)
         brand_lay.addWidget(self.url_label)
         h_lay.addLayout(brand_lay, 1)
+
+        self.update_btn = QPushButton("Update")
+        self.update_btn.setObjectName("UpdateBtn")
+        self.update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_btn.setVisible(False)
+        self.update_btn.clicked.connect(self._perform_update)
+        h_lay.addWidget(self.update_btn)
 
         self.status_pill = QLabel("● Stopped")
         self.status_pill.setObjectName("StatusPill")
@@ -584,6 +674,62 @@ class LauncherWindow(QWidget):
             self._cdp_ok = self.controller.check_cdp()
             time.sleep(1.5)
 
+    def _update_check_worker(self) -> None:
+        info = check_for_update()
+        if info:
+            self._update_info = info
+
+    def _perform_update(self) -> None:
+        info = self._update_info
+        if not info or self._updating:
+            return
+        if not getattr(sys, "frozen", False) or os.name != "nt":
+            if info.get("html_url"):
+                webbrowser.open(info["html_url"])
+            return
+
+        self._updating = True
+        self.update_btn.setEnabled(False)
+        self.update_btn.setText("Updating...")
+        threading.Thread(target=self._download_and_apply_update, args=(info,), daemon=True).start()
+
+    def _download_and_apply_update(self, info: dict[str, str]) -> None:
+        cur_exe = Path(sys.executable).resolve()
+        new_exe = cur_exe.with_name(cur_exe.name + ".new")
+        try:
+            self.controller._append_log(f"[updater] downloading {info['tag']}...")
+            req = urllib.request.Request(info["exe_url"], headers={"User-Agent": "GTAW-Tactical-Launcher"})
+            with urllib.request.urlopen(req, timeout=60.0) as resp:
+                data = resp.read()
+
+            sha_url = info.get("sha_url")
+            if sha_url:
+                sha_req = urllib.request.Request(sha_url, headers={"User-Agent": "GTAW-Tactical-Launcher"})
+                with urllib.request.urlopen(sha_req, timeout=15.0) as sresp:
+                    expected = sresp.read().decode("utf-8").strip().split()[0].lower()
+                actual = hashlib.sha256(data).hexdigest().lower()
+                if actual != expected:
+                    raise ValueError(f"SHA-256 mismatch: {actual} != {expected}")
+
+            new_exe.write_bytes(data)
+            self.controller.stop()
+
+            ps_cmd = (
+                f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue; "
+                f"Move-Item -Force '{new_exe}' '{cur_exe}'; "
+                f"Start-Process '{cur_exe}'"
+            )
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            QTimer.singleShot(0, QApplication.quit)
+        except Exception as exc:
+            self.controller._append_log(f"[updater] update failed: {exc}")
+            new_exe.unlink(missing_ok=True)
+            self._updating = False
+            QTimer.singleShot(0, lambda: (self.update_btn.setEnabled(True), self.update_btn.setText(f"Update {info['tag']}")))
+
     @staticmethod
     def _format_uptime(sec: object) -> str:
         if not isinstance(sec, (int, float)) or sec < 0:
@@ -626,6 +772,10 @@ class LauncherWindow(QWidget):
         if self.cdp_label.property("connected") != self._cdp_ok:
             self.cdp_label.setProperty("connected", self._cdp_ok)
             self._repolish(self.cdp_label)
+
+        if self._update_info and not self.update_btn.isVisible():
+            self.update_btn.setText(f"Update {self._update_info['tag']}")
+            self.update_btn.setVisible(True)
 
         logs = snap["logs"]
         log_text = "\n".join(logs) if isinstance(logs, list) and logs else "Launcher ready."

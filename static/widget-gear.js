@@ -8,11 +8,23 @@
     return cachedSchemas;
   }
 
+  function getPopoutPresetMeta(schema, selectorVal) {
+    const selParam = (schema?.params || []).find(p => p.key === 'selector');
+    if (!selParam) return null;
+    return (selParam.options || []).find(o => o.value === selectorVal) || selParam.options?.[0] || null;
+  }
+
   function resolveParams(schema, rawParams) {
     const out = {};
     for (const p of schema?.params || []) {
       const val = rawParams && rawParams[p.key] !== undefined ? rawParams[p.key] : p.default;
       out[p.key] = val;
+    }
+    const meta = getPopoutPresetMeta(schema, out.selector);
+    if (meta && Array.isArray(meta.allowed_modes) && meta.allowed_modes.length > 0) {
+      if (!meta.allowed_modes.includes(out.mode)) {
+        out.mode = meta.mode || meta.allowed_modes[0];
+      }
     }
     return out;
   }
@@ -42,6 +54,8 @@
     }
 
     const resolved = resolveParams(schema, currentValues);
+    const meta = getPopoutPresetMeta(schema, resolved.selector);
+
     for (const p of params) {
       const row = document.createElement('label');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#e6ecf5;';
@@ -61,14 +75,33 @@
       } else if (p.type === 'select') {
         const sel = document.createElement('select');
         sel.style.cssText = 'background:#1a202a;color:#e6ecf5;border:1px solid #283140;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;max-width:170px;';
-        for (const opt of p.options || []) {
+        let opts = p.options || [];
+        if (p.key === 'mode' && meta && Array.isArray(meta.allowed_modes)) {
+          opts = opts.filter(o => meta.allowed_modes.includes(o.value));
+        }
+        for (const opt of opts) {
           const o = document.createElement('option');
           o.value = opt.value;
           o.textContent = opt.label;
           if (String(resolved[p.key]) === String(opt.value)) o.selected = true;
           sel.appendChild(o);
         }
-        sel.addEventListener('change', () => onChange(p.key, sel.value));
+        sel.addEventListener('change', () => {
+          const val = sel.value;
+          if (p.key === 'selector') {
+            const nextMeta = getPopoutPresetMeta(schema, val);
+            const nextValues = { ...resolved, selector: val };
+            if (nextMeta) {
+              nextValues.mode = nextMeta.mode;
+              nextValues.hide = nextMeta.hide;
+            }
+            onChange(p.key, val, nextValues);
+            renderParamInputs(container, schema, nextValues, onChange);
+            return;
+          }
+          resolved[p.key] = val;
+          onChange(p.key, val);
+        });
         row.appendChild(sel);
       }
       container.appendChild(row);
@@ -129,9 +162,9 @@
     note.className = 'wg-pop-note';
     note.textContent = 'Temporary for this view only.';
 
-    renderParamInputs(body, schema, current, (key, val) => {
-      current[key] = val;
-      location.href = buildWidgetUrl(schema, current, false);
+    renderParamInputs(body, schema, current, (key, val, fullValues) => {
+      const next = fullValues || { ...current, [key]: val };
+      location.href = buildWidgetUrl(schema, next, false);
     });
 
     pop.append(title, body, note);

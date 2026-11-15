@@ -1,0 +1,130 @@
+[
+  {
+    "id": "patrol-vertical",
+    "name": "Vertical Monitor (Patrol)",
+    "columns": "1",
+    "density": "normal",
+    "widgets": [
+      {
+        "type": "els",
+        "title": "ELS Controller",
+        "span": 1,
+        "height": 340,
+        "visible": true,
+        "params": { "preset": "interceptor" }
+      },
+      {
+        "type": "radio",
+        "title": "Radio Deck",
+        "span": 1,
+        "height": 440,
+        "visible": true,
+        "params": { "show_dep": true }
+      },
+      {
+        "type": "comms",
+        "title": "Comms Hub",
+        "span": 1,
+        "height": 260,
+        "visible": true,
+        "params": {}
+      }
+    ]
+  },
+  {
+    "id": "ipad-mdt",
+    "name": "iPad / Landscape MDT",
+    "columns": "2",
+    "density": "touch",
+    "widgets": [
+      {
+        "type": "els",
+        "title": "ELS Controller",
+        "span": 1,
+        "height": 350,
+        "visible": true,
+        "params": { "preset": "fedsig" }
+      },
+      {
+        "type": "radio",
+        "title": "Radio Deck",
+        "span": 1,
+        "height": 350,
+        "visible": true,
+        "params": { "show_dep": true }
+      },
+      {
+        "type": "comms",
+        "title": "Comms Hub",
+        "span": 2,
+        "height": 260,
+        "visible": true,
+        "params": {}
+      }
+    ]
+  },
+  {
+    "id": "phone-touch",
+    "name": "Phone / Compact Touch",
+    "columns": "1",
+    "density": "touch",
+    "widgets": [
+      {
+        "type": "radio",
+        "title": "Radio Deck",
+        "span": 1,
+        "height": 460,
+        "visible": true,
+        "params": { "show_dep": true }
+      },
+      {
+        "type": "els",
+        "title": "ELS Controller",
+        "span": 1,
+        "height": 340,
+        "visible": true,
+        "params": { "preset": "fedsig" }
+      },
+      {
+        "type": "comms",
+        "title": "Comms Hub",
+        "span": 1,
+        "height": 240,
+        "visible": false,
+        "params": {}
+      }
+    ]
+  },
+  {
+    "id": "amber-utility",
+    "name": "Amber Utility / DOT",
+    "columns": "1",
+    "density": "normal",
+    "widgets": [
+      {
+        "type": "els",
+        "title": "Amber ELS",
+        "span": 1,
+        "height": 265,
+        "visible": true,
+        "params": { "preset": "amber" }
+      },
+      {
+        "type": "radio",
+        "title": "Radio Deck",
+        "span": 1,
+        "height": 460,
+        "visible": true,
+        "params": { "show_dep": true }
+      },
+      {
+        "type": "comms",
+        "title": "Comms Hub",
+        "span": 1,
+        "height": 240,
+        "visible": false,
+        "params": {}
+      }
+    ]
+  }
+]

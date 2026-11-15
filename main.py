@@ -28,59 +28,20 @@ from models import (
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DATA_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else BASE_DIR
 CONFIG_PATH = BASE_DIR / "config" / "presets.json"
+BUILTIN_LAYOUTS_PATH = BASE_DIR / "config" / "layouts.json"
 LAYOUTS_PATH = DATA_DIR / "layouts.json"
 STATIC_DIR = BASE_DIR / "static"
 
-BUILTIN_DECK_PRESETS: list[DeckLayout] = [
-    DeckLayout(
-        id="patrol-vertical",
-        name="Vertical Monitor (Patrol)",
-        columns="1",
-        density="normal",
-        builtin=True,
-        widgets=[
-            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=340, visible=True, params={"preset": "interceptor"}),
-            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=440, visible=True, params={"show_dep": True}),
-            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=260, visible=True, params={}),
-        ],
-    ),
-    DeckLayout(
-        id="ipad-mdt",
-        name="iPad / Landscape MDT",
-        columns="2",
-        density="touch",
-        builtin=True,
-        widgets=[
-            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=350, visible=True, params={"preset": "fedsig"}),
-            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=350, visible=True, params={"show_dep": True}),
-            DeckWidgetConfig(type="comms", title="Comms Hub", span=2, height=260, visible=True, params={}),
-        ],
-    ),
-    DeckLayout(
-        id="phone-touch",
-        name="Phone / Compact Touch",
-        columns="1",
-        density="touch",
-        builtin=True,
-        widgets=[
-            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=460, visible=True, params={"show_dep": True}),
-            DeckWidgetConfig(type="els", title="ELS Controller", span=1, height=340, visible=True, params={"preset": "fedsig"}),
-            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=240, visible=False, params={}),
-        ],
-    ),
-    DeckLayout(
-        id="amber-utility",
-        name="Amber Utility / DOT",
-        columns="1",
-        density="normal",
-        builtin=True,
-        widgets=[
-            DeckWidgetConfig(type="els", title="Amber ELS", span=1, height=265, visible=True, params={"preset": "amber"}),
-            DeckWidgetConfig(type="radio", title="Radio Deck", span=1, height=460, visible=True, params={"show_dep": True}),
-            DeckWidgetConfig(type="comms", title="Comms Hub", span=1, height=240, visible=False, params={}),
-        ],
-    ),
-]
+
+def load_builtin_layouts() -> list[DeckLayout]:
+    """Load default built-in deck presets from config/layouts.json."""
+    if not BUILTIN_LAYOUTS_PATH.exists():
+        return []
+    raw = json.loads(BUILTIN_LAYOUTS_PATH.read_text(encoding="utf-8"))
+    return [DeckLayout.model_validate({**item, "builtin": True}) for item in raw]
+
+
+BUILTIN_DECK_PRESETS: list[DeckLayout] = load_builtin_layouts()
 BUILTIN_IDS = {p.id for p in BUILTIN_DECK_PRESETS}
 
 
@@ -320,7 +281,13 @@ async def get_deck() -> FileResponse:
 async def api_widget_schemas() -> dict[str, Any]:
     """Return known widget types and their customizable parameter schemas."""
     popout_options = [
-        {"value": p.selector, "label": p.name, "mode": p.mode, "hide": p.hide_in_game}
+        {
+            "value": p.selector,
+            "label": p.name,
+            "mode": p.mode,
+            "allowed_modes": p.allowed_modes,
+            "hide": p.hide_in_game,
+        }
         for p in presets
     ]
     default_selector = popout_options[0]["value"] if popout_options else ""

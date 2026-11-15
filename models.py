@@ -11,6 +11,9 @@ class WidgetPreset(BaseModel):
     name: str
     selector: str
     mode: Literal["fill", "fit-width", "contain", "natural"] = "fill"
+    allowed_modes: list[Literal["fill", "fit-width", "contain", "natural"]] = Field(
+        default_factory=lambda: ["fill", "fit-width", "contain", "natural"]
+    )
     open_command: str | None = None
     launchable: bool = False
     hide_in_game: bool = True

@@ -697,8 +697,8 @@
         if (schema && schema.params && schema.params.length > 0) {
           const paramBox = document.createElement('div');
           paramBox.className = 'widget-row-params';
-          window.WidgetGear.renderParamInputs(paramBox, schema, w.params, (key, val) => {
-            w.params[key] = val;
+          window.WidgetGear.renderParamInputs(paramBox, schema, w.params, (key, val, fullValues) => {
+            w.params = fullValues ? { ...fullValues } : { ...w.params, [key]: val };
             if (w.type === 'popout' && key === 'selector') {
               const opt = (schema.params.find(p => p.key === 'selector')?.options || []).find(o => o.value === val);
               if (opt) w.title = opt.label;
@@ -767,8 +767,8 @@
           note.className = 'card-gear-note';
           note.textContent = 'Temporary override (does not save to preset).';
 
-          window.WidgetGear.renderParamInputs(popBody, schema, params, (key, val) => {
-            tempOverrides[idx] = { ...(tempOverrides[idx] || {}), [key]: val };
+          window.WidgetGear.renderParamInputs(popBody, schema, params, (key, val, fullValues) => {
+            tempOverrides[idx] = fullValues ? { ...fullValues } : { ...(tempOverrides[idx] || {}), [key]: val };
             const nextParams = effectiveParams(idx, w);
             frame.src = window.WidgetGear.buildWidgetUrl(schema, nextParams, true);
             popLink.href = window.WidgetGear.buildWidgetUrl(schema, nextParams, false);
