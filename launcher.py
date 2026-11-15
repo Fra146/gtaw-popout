@@ -22,7 +22,7 @@ import webbrowser
 try:
     from version import APP_VERSION
 except Exception:
-    APP_VERSION = "0.2.0"
+    APP_VERSION = "untagged"
 
 GITHUB_REPO = "Fra146/gtaw-popout"
 EXE_ASSET_NAME = "GTAW-Tactical-Launcher.exe"
@@ -459,7 +459,8 @@ class LauncherWindow(QWidget):
             self.controller.start()
 
         threading.Thread(target=self._cdp_poll_loop, daemon=True).start()
-        threading.Thread(target=self._update_check_worker, daemon=True).start()
+        if getattr(sys, "frozen", False) and APP_VERSION != "untagged":
+            threading.Thread(target=self._update_check_worker, daemon=True).start()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh_ui)
@@ -490,7 +491,8 @@ class LauncherWindow(QWidget):
 
         brand_lay = QVBoxLayout()
         brand_lay.setSpacing(1)
-        title = QLabel(f"GTAW Tactical  v{APP_VERSION}")
+        version_text = "(untagged)" if APP_VERSION == "untagged" else f"v{APP_VERSION}"
+        title = QLabel(f"GTAW Tactical  {version_text}")
         title.setObjectName("BrandTitle")
         self.url_label = QLabel(f"http://{self.controller.get_lan_ip()}:{self.controller.port}")
         self.url_label.setObjectName("BrandSub")
