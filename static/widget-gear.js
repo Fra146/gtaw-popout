@@ -103,6 +103,20 @@
           onChange(p.key, val);
         });
         row.appendChild(sel);
+      } else if (p.type === 'text') {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = resolved[p.key] ?? '';
+        inp.placeholder = p.placeholder || 'Comma-separated...';
+        inp.style.cssText = 'background:#1a202a;color:#e6ecf5;border:1px solid #283140;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:600;width:165px;outline:none;';
+        inp.addEventListener('change', () => onChange(p.key, inp.value));
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onChange(p.key, inp.value);
+          }
+        });
+        row.appendChild(inp);
       }
       container.appendChild(row);
     }

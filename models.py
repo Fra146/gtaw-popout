@@ -38,8 +38,19 @@ class CommsSpeaker(BaseModel):
     id: str
     name: str
     speaking: bool = False
+    whispering: bool = False
     muted: bool = False
     deafened: bool = False
+    channel_name: str | None = None
+
+
+class CommsChannelGroup(BaseModel):
+    """A TeamSpeak channel and its current participants."""
+
+    id: str
+    name: str
+    is_current: bool = False
+    speakers: list[CommsSpeaker] = Field(default_factory=list)
 
 
 class CommsStateMessage(BaseModel):
@@ -49,7 +60,17 @@ class CommsStateMessage(BaseModel):
     connected: bool
     channel: str | None = None
     speakers: list[CommsSpeaker] = Field(default_factory=list)
+    channels: list[CommsChannelGroup] = Field(default_factory=list)
+    whisperers: list[CommsSpeaker] = Field(default_factory=list)
     error: str | None = None
+
+
+class AppConfig(BaseModel):
+    """Persisted runtime configuration stored in config.json."""
+
+    ts3_api_key: str = ""
+    ts3_host: str = "127.0.0.1"
+    ts3_port: int = 25639
 
 
 class LaunchRequest(BaseModel):

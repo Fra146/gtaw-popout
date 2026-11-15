@@ -79,15 +79,128 @@
       background: #22c55e;
       box-shadow: 0 0 8px #22c55e;
     }
-    .flags {
-      font-size: 11px;
+    .speaker.muted:not(.speaking) .talk-dot {
+      background: #f59e0b;
+    }
+    .speaker.deafened:not(.speaking) .talk-dot {
+      background: #ef4444;
+    }
+    .speaker.deafened:not(.speaking) .speaker-name {
       color: #8b949e;
+    }
+    .flags {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .flag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .flag-badge.muted {
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+    }
+    .flag-badge.deafened {
+      background: rgba(239, 68, 68, 0.16);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #f87171;
     }
     .empty {
       padding: 16px 12px;
       font-size: 12px;
       color: #8b949e;
       text-align: center;
+    }
+    .whisper-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      background: #0d121a;
+      border-bottom: 1px solid #1d2432;
+      font-size: 11px;
+      color: #6e7681;
+      min-height: 20px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .whisper-bar.active {
+      background: rgba(245, 158, 11, 0.16);
+      border-bottom-color: rgba(245, 158, 11, 0.55);
+      color: #fef3c7;
+    }
+    .whisper-label {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 10px;
+      color: #8b949e;
+      flex-shrink: 0;
+    }
+    .whisper-bar.active .whisper-label {
+      color: #fbbf24;
+    }
+    .whisper-names {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-weight: 600;
+      overflow: hidden;
+    }
+    .whisper-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, 0.22);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      color: #fffbeb;
+      font-size: 11px;
+    }
+    .whisper-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #fbbf24;
+      box-shadow: 0 0 6px #fbbf24;
+    }
+    .channel-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .channel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px 2px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .current-badge {
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.45);
+      color: #93c5fd;
+    }
+    .channel-empty {
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #6e7681;
     }
   </style>
 </head>
@@ -96,15 +209,74 @@
     <span class="status"><span id="conn-dot" class="dot"></span><span id="source-label">COMMS</span></span>
     <span id="channel-label">Disconnected</span>
   </div>
+  <div id="whisper-bar" class="whisper-bar">
+    <span class="whisper-label">WHISPERING</span>
+    <span id="whisper-names" class="whisper-names">--</span>
+  </div>
   <div id="speakers" class="speakers">
     <div class="empty">Waiting for voice state...</div>
   </div>
 
+  <script src="/static/widget-gear.js"></script>
   <script>
+    const urlParams = new URLSearchParams(location.search);
+    const trackedChannels = urlParams.get('tracked_channels') || '';
+
     const connDot = document.getElementById('conn-dot');
     const sourceLabel = document.getElementById('source-label');
     const channelLabel = document.getElementById('channel-label');
+    const whisperBar = document.getElementById('whisper-bar');
+    const whisperNamesEl = document.getElementById('whisper-names');
     const speakersEl = document.getElementById('speakers');
+
+    function createSpeakerRow(s) {
+      const row = document.createElement('div');
+      row.className = 'speaker'
+        + (s.speaking ? ' speaking' : '')
+        + (s.muted ? ' muted' : '')
+        + (s.deafened ? ' deafened' : '');
+      row.innerHTML = `
+        <span class="speaker-name"><span class="talk-dot"></span><span></span></span>
+        <span class="flags"></span>
+      `;
+      row.querySelector('.speaker-name span:last-child').textContent = s.name;
+      const flagsEl = row.querySelector('.flags');
+      if (s.muted) {
+        const badge = document.createElement('span');
+        badge.className = 'flag-badge muted';
+        badge.textContent = 'MUTED';
+        flagsEl.appendChild(badge);
+      }
+      if (s.deafened) {
+        const badge = document.createElement('span');
+        badge.className = 'flag-badge deafened';
+        badge.textContent = 'DEAF';
+        flagsEl.appendChild(badge);
+      }
+      return row;
+    }
+
+    function renderWhispers(whisperers) {
+      const list = whisperers || [];
+      whisperNamesEl.innerHTML = '';
+      if (!list.length) {
+        whisperBar.classList.remove('active');
+        whisperNamesEl.textContent = '--';
+        return;
+      }
+      whisperBar.classList.add('active');
+      for (const w of list) {
+        const pill = document.createElement('span');
+        pill.className = 'whisper-pill';
+        const dot = document.createElement('span');
+        dot.className = 'whisper-dot';
+        const name = document.createElement('span');
+        name.textContent = w.channel_name ? `${w.name} (${w.channel_name})` : w.name;
+        pill.appendChild(dot);
+        pill.appendChild(name);
+        whisperNamesEl.appendChild(pill);
+      }
+    }
 
     function render(msg) {
       sourceLabel.textContent = (msg.source || 'COMMS').toUpperCase();
@@ -113,8 +285,46 @@
         ? (msg.channel || 'Connected')
         : (msg.error || 'Disconnected');
 
-      const list = msg.speakers || [];
+      renderWhispers(msg.whisperers);
+
+      const channels = msg.channels || [];
       speakersEl.innerHTML = '';
+
+      if (channels.length > 0) {
+        for (const ch of channels) {
+          const group = document.createElement('div');
+          group.className = 'channel-group';
+
+          const hdr = document.createElement('div');
+          hdr.className = 'channel-header';
+          const title = document.createElement('span');
+          title.textContent = ch.name || 'Channel';
+          hdr.appendChild(title);
+          if (ch.is_current) {
+            const badge = document.createElement('span');
+            badge.className = 'current-badge';
+            badge.textContent = 'CURRENT';
+            hdr.appendChild(badge);
+          }
+          group.appendChild(hdr);
+
+          const members = ch.speakers || [];
+          if (!members.length) {
+            const empty = document.createElement('div');
+            empty.className = 'channel-empty';
+            empty.textContent = 'Empty';
+            group.appendChild(empty);
+          } else {
+            for (const s of members) {
+              group.appendChild(createSpeakerRow(s));
+            }
+          }
+          speakersEl.appendChild(group);
+        }
+        return;
+      }
+
+      const list = msg.speakers || [];
       if (!list.length) {
         const empty = document.createElement('div');
         empty.className = 'empty';
@@ -124,23 +334,14 @@
       }
 
       for (const s of list) {
-        const row = document.createElement('div');
-        row.className = 'speaker' + (s.speaking ? ' speaking' : '');
-        const flags = [];
-        if (s.muted) flags.push('MUTED');
-        if (s.deafened) flags.push('DEAF');
-        row.innerHTML = `
-          <span class="speaker-name"><span class="talk-dot"></span><span></span></span>
-          <span class="flags">${flags.join(' · ')}</span>
-        `;
-        row.querySelector('.speaker-name span:last-child').textContent = s.name;
-        speakersEl.appendChild(row);
+        speakersEl.appendChild(createSpeakerRow(s));
       }
     }
 
     function connectWs() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${location.host}/ws/comms`);
+      const qs = trackedChannels ? `?tracked_channels=${encodeURIComponent(trackedChannels)}` : '';
+      const ws = new WebSocket(`${proto}//${location.host}/ws/comms${qs}`);
       ws.onmessage = (event) => {
         render(JSON.parse(event.data));
       };
@@ -152,6 +353,7 @@
     }
 
     connectWs();
+    window.WidgetGear?.mountStandaloneGear('comms');
   </script>
 </body>
 </html>

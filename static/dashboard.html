@@ -117,6 +117,8 @@
     </div>
     <div class="badges">
       <span class="badge"><span id="bridge-dot" class="dot"></span><span id="bridge-text">CDP: Checking...</span></span>
+      <span class="badge"><span id="ts-dot" class="dot"></span><span id="ts-text">TeamSpeak: Checking...</span></span>
+      <span class="badge"><span id="server-dot" class="dot"></span><span id="server-text">Server: Checking...</span></span>
       <select id="els-preset" title="ELS Panel Preset">
         <option value="fedsig">ELS: SmartSiren</option>
         <option value="interceptor">ELS: Night-Ops</option>
@@ -125,9 +127,21 @@
       </select>
       <button id="open-els-btn">ELS Panel</button>
       <button id="open-radio-btn">Radio Panel</button>
+      <button id="open-comms-btn">Comms</button>
       <button id="open-deck-btn">Tactical Deck</button>
     </div>
   </header>
+
+  <section>
+    <h2>TeamSpeak ClientQuery</h2>
+    <div class="card">
+      <form id="ts-key-form" class="row">
+        <input id="ts-api-key" type="password" placeholder="TeamSpeak ClientQuery API Key" autocomplete="off" style="min-width: 240px; flex: 1;" />
+        <button type="submit" class="primary">Save Key</button>
+        <span id="ts-key-hint" class="mono"></span>
+      </form>
+    </div>
+  </section>
 
   <section>
     <h2>Widget Presets</h2>
@@ -263,19 +277,78 @@
       }
     }
 
+    const tsDot = document.getElementById('ts-dot');
+    const tsText = document.getElementById('ts-text');
+    const serverDot = document.getElementById('server-dot');
+    const serverText = document.getElementById('server-text');
+    const tsKeyForm = document.getElementById('ts-key-form');
+    const tsApiKeyInput = document.getElementById('ts-api-key');
+    const tsKeyHint = document.getElementById('ts-key-hint');
+
+    function renderTeamSpeakStatus(status) {
+      const tsState = status.teamspeak_status || 'disconnected';
+      if (tsState === 'connected') {
+        tsDot.className = 'dot ok';
+        tsText.textContent = 'TeamSpeak: Connected';
+      } else if (tsState === 'invalid_key') {
+        tsDot.className = 'dot warn';
+        tsText.textContent = 'TeamSpeak: Invalid Key';
+      } else {
+        tsDot.className = 'dot';
+        tsText.textContent = 'TeamSpeak: Disconnected';
+      }
+      if (status.teamspeak_has_key) {
+        tsApiKeyInput.placeholder = 'ClientQuery key saved in config.json (enter new key to replace)';
+      } else {
+        tsApiKeyInput.placeholder = 'TeamSpeak ClientQuery API Key';
+      }
+      tsKeyHint.textContent = status.teamspeak_error || '';
+    }
+
     async function refreshStatus() {
       try {
         const res = await fetch('/api/status');
         const status = await res.json();
+        serverDot.className = 'dot ok';
+        serverText.textContent = 'Server: Online';
         bridgeDot.className = 'dot ' + (status.bridge_connected ? 'ok' : '');
         bridgeText.textContent = status.bridge_connected ? 'CDP: Connected' : 'CDP: Disconnected';
+        renderTeamSpeakStatus(status);
 
         renderPresets(status);
       } catch (err) {
+        serverDot.className = 'dot';
+        serverText.textContent = 'Server: Offline';
         bridgeDot.className = 'dot';
-        bridgeText.textContent = 'Server Offline';
+        bridgeText.textContent = 'CDP: Disconnected';
+        tsDot.className = 'dot';
+        tsText.textContent = 'TeamSpeak: Disconnected';
       }
     }
+
+    tsKeyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const apiKey = tsApiKeyInput.value.trim();
+      if (!apiKey) return;
+      tsKeyHint.textContent = 'Saving and connecting...';
+      try {
+        const res = await fetch('/api/comms/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'teamspeak', api_key: apiKey }),
+        });
+        const data = await res.json();
+        tsApiKeyInput.value = '';
+        await refreshStatus();
+        if (data.connected) {
+          tsKeyHint.textContent = 'Saved to config.json and connected.';
+        } else if (data.error) {
+          tsKeyHint.textContent = data.error;
+        }
+      } catch (err) {
+        tsKeyHint.textContent = 'Failed to save ClientQuery key.';
+      }
+    });
 
     document.getElementById('scan-btn').addEventListener('click', async () => {
       scanList.innerHTML = '<span class="mono">Scanning active NUI frames...</span>';
@@ -323,6 +396,10 @@
 
     document.getElementById('open-radio-btn').addEventListener('click', () => {
       window.open('/radio', 'tactical_radio_deck', 'popup=yes,width=480,height=560,menubar=no,toolbar=no,location=no,status=no');
+    });
+
+    document.getElementById('open-comms-btn').addEventListener('click', () => {
+      window.open('/comms', 'tactical_comms', 'popup=yes,width=380,height=420,menubar=no,toolbar=no,location=no,status=no');
     });
 
     document.getElementById('open-deck-btn').addEventListener('click', () => {

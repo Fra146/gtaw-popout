@@ -16,6 +16,7 @@ env/
 # Environment & local secrets
 .env
 .env.*
+config.json
 
 # Logs & temp files
 *.log
