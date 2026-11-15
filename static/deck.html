@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="data:,">
+  <title>Tactical Deck</title>
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --surface: #141820;
+      --card: #1a202a;
+      --border: #283140;
+      --border-hi: #3a465c;
+      --text: #e6ecf5;
+      --muted: #8a96a8;
+      --accent: #38bdf8;
+      --red: #d50215;
+      --amber: #f59e0b;
+      --green: #22c55e;
+      --gap: 10px;
+      --ctl-pad: 6px 11px;
+      --ctl-font: 12px;
+      --ctl-min-h: 32px;
+    }
+
+    @media (pointer: coarse) {
+      :root {
+        --gap: 12px;
+        --ctl-pad: 9px 14px;
+        --ctl-font: 13px;
+        --ctl-min-h: 42px;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: var(--gap);
+      gap: var(--gap);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand a {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--ctl-min-h);
+      text-decoration: none;
+      color: var(--muted);
+      font-size: var(--ctl-font);
+      font-weight: 700;
+      padding: var(--ctl-pad);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+    }
+
+    .brand a:hover { color: var(--text); border-color: var(--border-hi); }
+
+    .title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    select, input, button {
+      font: inherit;
+      color: var(--text);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: var(--ctl-pad);
+      min-height: var(--ctl-min-h);
+      font-size: var(--ctl-font);
+      font-weight: 700;
+      outline: none;
+    }
+
+    select:focus, input:focus { border-color: var(--accent); }
+
+    button { cursor: pointer; }
+    button:hover:not(:disabled) { background: #232a37; border-color: var(--border-hi); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.active {
+      border-color: rgba(56, 189, 248, 0.7);
+      background: rgba(56, 189, 248, 0.16);
+      color: #7dd3fc;
+    }
+    button.primary {
+      background: var(--red);
+      border-color: #ef1a2d;
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) { background: #ef1a2d; }
+    button.danger {
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #fca5a5;
+    }
+
+    .editor {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      border-radius: 10px;
+    }
+
+    .editor.open { display: flex; }
+
+    .notice {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      background: rgba(245, 158, 11, 0.12);
+      color: #fcd34d;
+    }
+
+    .notice.saved {
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.1);
+      color: #86efac;
+    }
+
+    .editor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field label {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .add-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+
+    .add-bar select { flex: 1; min-width: 180px; }
+
+    .widget-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .widget-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 9px 11px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .widget-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .widget-row .w-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }
+
+    .widget-row .w-left input[type="checkbox"] {
+      min-height: 16px;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+    }
+
+    .widget-row .w-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .widget-row-params {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+
+    .editor-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+
+    .status-msg {
+      font-size: 11px;
+      color: #7dd3fc;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .deck-grid {
+      display: grid;
+      gap: var(--gap);
+      grid-template-columns: 1fr;
+      flex: 1;
+      align-content: start;
+    }
+
+    .deck-grid.cols-1 { grid-template-columns: 1fr; }
+    .deck-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .deck-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .deck-grid.cols-auto { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    @media (max-width: 860px), (orientation: portrait) {
+      .deck-grid.cols-auto { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .deck-grid.cols-2, .deck-grid.cols-3 { grid-template-columns: 1fr; }
+    }
+
+    .widget-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      min-height: 180px;
+    }
+
+    .widget-card.span-2 {
+      grid-column: span 2;
+    }
+
+    @media (max-width: 860px), (orientation: portrait) {
+      .deck-grid.cols-auto .widget-card.span-2 { grid-column: span 1; }
+    }
+    @media (max-width: 640px) {
+      .widget-card.span-2 { grid-column: span 1; }
+    }
+
+    .widget-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 10px;
+      background: #10141b;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .widget-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .widget-bar a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 10px;
+    }
+    .widget-bar a:hover { color: var(--text); }
+
+    .gear-btn {
+      padding: 2px 6px;
+      min-height: 22px;
+      font-size: 12px;
+      line-height: 1;
+      border-radius: 5px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+    }
+    .gear-btn:hover, .gear-btn.open {
+      color: var(--text);
+      background: var(--card);
+      border-color: var(--border-hi);
+    }
+
+    .card-gear-pop {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      position: absolute;
+      top: 34px;
+      right: 8px;
+      z-index: 30;
+      min-width: 225px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(16, 20, 27, 0.97);
+      border: 1px solid var(--border-hi);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+    }
+
+    .card-gear-pop.open { display: flex; }
+
+    .card-gear-note {
+      font-size: 10px;
+      color: #64748b;
+    }
+
+    .widget-frame {
+      width: 100%;
+      flex: 1;
+      border: 0;
+      background: transparent;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <a href="/" title="Back to Root Dashboard">Root</a>
+        <span class="title">Tactical Deck</span>
+      </div>
+      <div class="controls">
+        <select id="preset-select" title="Select Layout Preset"></select>
+        <button id="edit-btn" type="button">Customize</button>
+        <button id="wakelock-btn" type="button" title="Keep screen awake (iPad / Tablet)">Wake Lock</button>
+        <button id="fullscreen-btn" type="button" title="Toggle Fullscreen">Fullscreen</button>
+      </div>
+    </div>
+
+    <div id="editor" class="editor">
+      <div id="persist-notice" class="notice"></div>
+
+      <div class="editor-grid">
+        <div class="field">
+          <label for="ed-name">Layout Name</label>
+          <input id="ed-name" type="text" placeholder="My Vertical Setup">
+        </div>
+        <div class="field">
+          <label for="ed-id">Bookmark ID</label>
+          <input id="ed-id" type="text" placeholder="my-vertical">
+        </div>
+        <div class="field">
+          <label for="ed-cols">Columns</label>
+          <select id="ed-cols">
+            <option value="auto">Auto (Portrait=1, Wide=2)</option>
+            <option value="1">1 Column (Vertical)</option>
+            <option value="2">2 Columns</option>
+            <option value="3">3 Columns</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="add-bar">
+        <select id="add-widget-select" title="Choose a widget to add"></select>
+        <button id="add-widget-btn" type="button">+ Add Widget</button>
+      </div>
+
+      <div id="widget-rows" class="widget-rows"></div>
+
+      <div class="editor-actions">
+        <span id="ed-status" class="status-msg"></span>
+        <div class="controls">
+          <button id="copy-url-btn" type="button">Copy Bookmark URL</button>
+          <button id="save-update-btn" type="button">Save Changes</button>
+          <button id="save-new-btn" type="button">Save as New Layout</button>
+          <button id="delete-btn" type="button" class="danger">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="deck-grid" class="deck-grid cols-auto"></div>
+  </div>
+
+  <script src="/static/widget-gear.js"></script>
+  <script>
+    const DEVICE_KEY = 'gtaw_deck_device_prefs_v1';
+
+    let widgetSchemas = {};
+    let allLayouts = [];
+    let currentLayout = null;
+    let tempOverrides = {};
+    let isDirty = false;
+    let wakeLockSentinel = null;
+
+    const presetSelect = document.getElementById('preset-select');
+    const editBtn = document.getElementById('edit-btn');
+    const wakeBtn = document.getElementById('wakelock-btn');
+    const fsBtn = document.getElementById('fullscreen-btn');
+    const editor = document.getElementById('editor');
+    const persistNotice = document.getElementById('persist-notice');
+    const edName = document.getElementById('ed-name');
+    const edId = document.getElementById('ed-id');
+    const edCols = document.getElementById('ed-cols');
+    const addWidgetSelect = document.getElementById('add-widget-select');
+    const addWidgetBtn = document.getElementById('add-widget-btn');
+    const widgetRows = document.getElementById('widget-rows');
+    const edStatus = document.getElementById('ed-status');
+    const saveUpdateBtn = document.getElementById('save-update-btn');
+    const saveNewBtn = document.getElementById('save-new-btn');
+    const deleteBtn = document.getElementById('delete-btn');
+    const copyUrlBtn = document.getElementById('copy-url-btn');
+    const deckGrid = document.getElementById('deck-grid');
+
+    function getDevicePrefs() {
+      try {
+        return JSON.parse(localStorage.getItem(DEVICE_KEY) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function saveDevicePrefs(patch) {
+      const next = { ...getDevicePrefs(), ...patch };
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(next));
+    }
+
+    function slugify(str) {
+      return String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'custom-layout';
+    }
+
+    function cloneLayout(layout) {
+      return JSON.parse(JSON.stringify(layout));
+    }
+
+    function markDirty() {
+      isDirty = true;
+      updatePersistenceUi();
+    }
+
+    function updatePersistenceUi() {
+      if (!currentLayout) return;
+      const isBuiltin = Boolean(currentLayout.builtin);
+      editBtn.textContent = isDirty ? 'Customize *' : 'Customize';
+
+      if (isBuiltin) {
+        persistNotice.className = 'notice';
+        persistNotice.textContent = isDirty
+          ? 'Built-in preset (read-only) — you have unsaved edits. Click "Save as New Layout" to persist to layouts.json.'
+          : 'Built-in preset (read-only). Edit anything below and click "Save as New Layout" to save your own copy to layouts.json.';
+        saveUpdateBtn.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        saveNewBtn.className = 'primary';
+      } else {
+        saveUpdateBtn.style.display = 'inline-block';
+        deleteBtn.style.display = 'inline-block';
+        saveUpdateBtn.className = 'primary';
+        saveNewBtn.className = '';
+        if (isDirty) {
+          persistNotice.className = 'notice';
+          persistNotice.textContent = 'Unsaved edits — click "Save Changes" to update layouts.json (or "Save as New Layout" to duplicate).';
+        } else {
+          persistNotice.className = 'notice saved';
+          persistNotice.textContent = `Custom layout "${currentLayout.id}" (saved in layouts.json).`;
+        }
+      }
+    }
+
+    function populateAddWidgetSelect() {
+      addWidgetSelect.innerHTML = '';
+      for (const [type, schema] of Object.entries(widgetSchemas)) {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = schema.label;
+        addWidgetSelect.appendChild(opt);
+      }
+    }
+
+    async function loadLayouts(preferredId) {
+      const resp = await fetch('/api/layouts');
+      const data = await resp.json();
+      const builtins = data.builtin || [];
+      const custom = data.custom || [];
+      allLayouts = [...builtins, ...custom];
+
+      presetSelect.innerHTML = '';
+      const addGroup = (label, items) => {
+        if (!items.length) return;
+        const grp = document.createElement('optgroup');
+        grp.label = label;
+        for (const item of items) {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          opt.textContent = item.name;
+          grp.appendChild(opt);
+        }
+        presetSelect.appendChild(grp);
+      };
+      addGroup('Built-in Presets', builtins);
+      addGroup('Custom Layouts (layouts.json)', custom);
+
+      const urlPreset = new URLSearchParams(location.search).get('preset');
+      const savedPreset = getDevicePrefs().lastPresetId;
+      const defaultId = window.innerHeight > window.innerWidth ? 'patrol-vertical' : 'ipad-mdt';
+      const targetId = preferredId || urlPreset || savedPreset || defaultId;
+      const found = allLayouts.find(l => l.id === targetId) || allLayouts[0];
+      if (found) selectLayout(found.id, false);
+    }
+
+    function selectLayout(id, updateUrl = true) {
+      const found = allLayouts.find(l => l.id === id);
+      if (!found) return;
+      currentLayout = cloneLayout(found);
+      tempOverrides = {};
+      isDirty = false;
+      presetSelect.value = found.id;
+      saveDevicePrefs({ lastPresetId: found.id });
+
+      if (updateUrl) {
+        const u = new URL(location.href);
+        u.searchParams.set('preset', found.id);
+        history.replaceState(null, '', u.toString());
+      }
+
+      syncEditorFields();
+      renderDeck();
+    }
+
+    function effectiveParams(idx, w) {
+      const schema = widgetSchemas[w.type];
+      return window.WidgetGear.resolveParams(schema, { ...(w.params || {}), ...(tempOverrides[idx] || {}) });
+    }
+
+    function syncEditorFields() {
+      if (!currentLayout) return;
+      edName.value = currentLayout.builtin ? `${currentLayout.name} (Custom)` : currentLayout.name;
+      edId.value = currentLayout.builtin ? `${currentLayout.id}-custom` : currentLayout.id;
+      edCols.value = currentLayout.columns || 'auto';
+      updatePersistenceUi();
+
+      widgetRows.innerHTML = '';
+      currentLayout.widgets.forEach((w, idx) => {
+        const schema = widgetSchemas[w.type];
+        w.params = window.WidgetGear.resolveParams(schema, w.params || {});
+
+        const row = document.createElement('div');
+        row.className = 'widget-row';
+
+        const top = document.createElement('div');
+        top.className = 'widget-row-top';
+
+        const left = document.createElement('label');
+        left.className = 'w-left';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = Boolean(w.visible);
+        chk.addEventListener('change', () => {
+          w.visible = chk.checked;
+          markDirty();
+          renderDeck();
+        });
+        const lbl = document.createElement('span');
+        lbl.textContent = `${w.title || schema?.label || w.type.toUpperCase()} (${w.type})`;
+        left.append(chk, lbl);
+
+        const right = document.createElement('div');
+        right.className = 'w-right';
+
+        const spanBtn = document.createElement('button');
+        spanBtn.type = 'button';
+        spanBtn.textContent = w.span === 2 ? '2 Cols' : '1 Col';
+        spanBtn.addEventListener('click', () => {
+          w.span = w.span === 2 ? 1 : 2;
+          spanBtn.textContent = w.span === 2 ? '2 Cols' : '1 Col';
+          markDirty();
+          renderDeck();
+        });
+
+        const hInput = document.createElement('input');
+        hInput.type = 'number';
+        hInput.min = '160';
+        hInput.max = '900';
+        hInput.step = '20';
+        hInput.value = String(w.height || schema?.defaultHeight || 320);
+        hInput.style.width = '74px';
+        hInput.title = 'Widget height (px)';
+        hInput.addEventListener('change', () => {
+          w.height = Math.max(160, Math.min(900, Number(hInput.value) || 320));
+          markDirty();
+          renderDeck();
+        });
+
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button';
+        upBtn.textContent = '↑';
+        upBtn.disabled = idx === 0;
+        upBtn.addEventListener('click', () => {
+          [currentLayout.widgets[idx - 1], currentLayout.widgets[idx]] = [currentLayout.widgets[idx], currentLayout.widgets[idx - 1]];
+          tempOverrides = {};
+          markDirty();
+          syncEditorFields();
+          renderDeck();
+        });
+
+        const dnBtn = document.createElement('button');
+        dnBtn.type = 'button';
+        dnBtn.textContent = '↓';
+        dnBtn.disabled = idx === currentLayout.widgets.length - 1;
+        dnBtn.addEventListener('click', () => {
+          [currentLayout.widgets[idx + 1], currentLayout.widgets[idx]] = [currentLayout.widgets[idx], currentLayout.widgets[idx + 1]];
+          tempOverrides = {};
+          markDirty();
+          syncEditorFields();
+          renderDeck();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'danger';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Remove widget';
+        delBtn.addEventListener('click', () => {
+          currentLayout.widgets.splice(idx, 1);
+          tempOverrides = {};
+          markDirty();
+          syncEditorFields();
+          renderDeck();
+        });
+
+        right.append(spanBtn, hInput, upBtn, dnBtn, delBtn);
+        top.append(left, right);
+        row.appendChild(top);
+
+        if (schema && schema.params && schema.params.length > 0) {
+          const paramBox = document.createElement('div');
+          paramBox.className = 'widget-row-params';
+          window.WidgetGear.renderParamInputs(paramBox, schema, w.params, (key, val) => {
+            w.params[key] = val;
+            if (w.type === 'popout' && key === 'selector') {
+              const opt = (schema.params.find(p => p.key === 'selector')?.options || []).find(o => o.value === val);
+              if (opt) w.title = opt.label;
+            }
+            delete tempOverrides[idx];
+            markDirty();
+            renderDeck();
+          });
+          row.appendChild(paramBox);
+        }
+
+        widgetRows.appendChild(row);
+      });
+    }
+
+    function renderDeck() {
+      if (!currentLayout) return;
+      deckGrid.className = `deck-grid cols-${currentLayout.columns || 'auto'}`;
+      deckGrid.innerHTML = '';
+
+      currentLayout.widgets.forEach((w, idx) => {
+        if (!w.visible) return;
+        const schema = widgetSchemas[w.type];
+        if (!schema) return;
+
+        const params = effectiveParams(idx, w);
+        const embedSrc = window.WidgetGear.buildWidgetUrl(schema, params, true);
+        const popoutSrc = window.WidgetGear.buildWidgetUrl(schema, params, false);
+
+        const card = document.createElement('div');
+        card.className = 'widget-card' + (w.span === 2 ? ' span-2' : '');
+        card.style.height = `${w.height || schema.defaultHeight || 320}px`;
+
+        const bar = document.createElement('div');
+        bar.className = 'widget-bar';
+        const titleEl = document.createElement('span');
+        titleEl.textContent = w.title || schema.label;
+
+        const actions = document.createElement('div');
+        actions.className = 'widget-bar-actions';
+
+        const frame = document.createElement('iframe');
+        frame.className = 'widget-frame';
+        frame.src = embedSrc;
+        frame.loading = 'eager';
+
+        const popLink = document.createElement('a');
+        popLink.href = popoutSrc;
+        popLink.target = '_blank';
+        popLink.textContent = 'Popout ↗';
+
+        if (schema.params && schema.params.length > 0) {
+          const gearBtn = document.createElement('button');
+          gearBtn.type = 'button';
+          gearBtn.className = 'gear-btn';
+          gearBtn.title = 'Temporary parameters for this view';
+          gearBtn.textContent = '⚙';
+
+          const pop = document.createElement('div');
+          pop.className = 'card-gear-pop';
+
+          const popBody = document.createElement('div');
+          popBody.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+
+          const note = document.createElement('div');
+          note.className = 'card-gear-note';
+          note.textContent = 'Temporary override (does not save to preset).';
+
+          window.WidgetGear.renderParamInputs(popBody, schema, params, (key, val) => {
+            tempOverrides[idx] = { ...(tempOverrides[idx] || {}), [key]: val };
+            const nextParams = effectiveParams(idx, w);
+            frame.src = window.WidgetGear.buildWidgetUrl(schema, nextParams, true);
+            popLink.href = window.WidgetGear.buildWidgetUrl(schema, nextParams, false);
+          });
+
+          pop.append(popBody, note);
+          gearBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = pop.classList.toggle('open');
+            gearBtn.classList.toggle('open', isOpen);
+          });
+          document.addEventListener('click', (e) => {
+            if (!card.contains(e.target)) {
+              pop.classList.remove('open');
+              gearBtn.classList.remove('open');
+            }
+          });
+
+          actions.append(gearBtn, popLink);
+          card.append(bar, pop, frame);
+        } else {
+          actions.appendChild(popLink);
+          card.append(bar, frame);
+        }
+
+        bar.append(titleEl, actions);
+        deckGrid.appendChild(card);
+      });
+    }
+
+    async function persistLayout(asNew) {
+      const name = edName.value.trim() || 'Custom Layout';
+      let id = slugify(edId.value.trim() || name);
+      if (asNew && allLayouts.some(l => l.builtin && l.id === id)) {
+        id = `${id}-custom`;
+      }
+      const payload = {
+        ...currentLayout,
+        id,
+        name,
+        columns: edCols.value,
+        density: 'normal',
+        builtin: false,
+      };
+      const resp = await fetch('/api/layouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const res = await resp.json();
+      if (!resp.ok) {
+        edStatus.textContent = res.detail || 'Save failed';
+        return;
+      }
+      edStatus.textContent = `Saved "${id}" to layouts.json`;
+      await loadLayouts(id);
+    }
+
+    presetSelect.addEventListener('change', () => selectLayout(presetSelect.value, true));
+    editBtn.addEventListener('click', () => {
+      editor.classList.toggle('open');
+      editBtn.classList.toggle('active', editor.classList.contains('open'));
+    });
+
+    addWidgetBtn.addEventListener('click', () => {
+      if (!currentLayout || !addWidgetSelect.value) return;
+      const type = addWidgetSelect.value;
+      const schema = widgetSchemas[type];
+      if (!schema) return;
+      const params = window.WidgetGear.resolveParams(schema, {});
+      let title = schema.label;
+      if (type === 'popout' && params.selector) {
+        const opt = (schema.params.find(p => p.key === 'selector')?.options || []).find(o => o.value === params.selector);
+        if (opt) title = opt.label;
+      }
+      currentLayout.widgets.push({
+        type,
+        title,
+        span: 1,
+        height: schema.defaultHeight || 320,
+        visible: true,
+        params,
+      });
+      markDirty();
+      syncEditorFields();
+      renderDeck();
+    });
+
+    edCols.addEventListener('change', () => {
+      if (!currentLayout) return;
+      currentLayout.columns = edCols.value;
+      markDirty();
+      renderDeck();
+    });
+
+    edName.addEventListener('input', () => {
+      markDirty();
+      if (currentLayout && currentLayout.builtin) {
+        edId.value = slugify(edName.value);
+      }
+    });
+
+    edId.addEventListener('input', markDirty);
+
+    saveUpdateBtn.addEventListener('click', () => persistLayout(false));
+    saveNewBtn.addEventListener('click', () => persistLayout(true));
+
+    deleteBtn.addEventListener('click', async () => {
+      if (!currentLayout || currentLayout.builtin) return;
+      const resp = await fetch(`/api/layouts/${encodeURIComponent(currentLayout.id)}`, { method: 'DELETE' });
+      if (resp.ok) {
+        edStatus.textContent = `Deleted "${currentLayout.id}"`;
+        await loadLayouts('patrol-vertical');
+      }
+    });
+
+    copyUrlBtn.addEventListener('click', async () => {
+      const u = new URL(location.href);
+      u.searchParams.set('preset', currentLayout.id);
+      try {
+        await navigator.clipboard.writeText(u.toString());
+        edStatus.textContent = 'Bookmark URL copied!';
+      } catch {
+        edStatus.textContent = u.toString();
+      }
+    });
+
+    wakeBtn.addEventListener('click', async () => {
+      if (!('wakeLock' in navigator)) {
+        edStatus.textContent = 'Wake Lock not supported on this browser';
+        return;
+      }
+      if (wakeLockSentinel) {
+        await wakeLockSentinel.release();
+        wakeLockSentinel = null;
+        wakeBtn.classList.remove('active');
+      } else {
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          wakeBtn.classList.add('active');
+          wakeLockSentinel.addEventListener('release', () => wakeBtn.classList.remove('active'));
+        } catch {}
+      }
+    });
+
+    fsBtn.addEventListener('click', async () => {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen?.();
+      } else {
+        await document.exitFullscreen?.();
+      }
+    });
+
+    (async () => {
+      widgetSchemas = await window.WidgetGear.fetchSchemas();
+      populateAddWidgetSelect();
+      await loadLayouts();
+    })();
+  </script>
+</body>
+</html>
