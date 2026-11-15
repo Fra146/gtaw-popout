@@ -433,13 +433,6 @@ class ServerController:
 class LauncherWindow(QWidget):
     """Bitfocus Companion-style PySide6 desktop launcher."""
 
-    ELS_PRESETS = {
-        "ELS: SmartSiren": "fedsig",
-        "ELS: Night-Ops": "interceptor",
-        "ELS: MX7000 Rotary": "rotary",
-        "ELS: Amber Utility": "amber",
-    }
-
     _update_ready = Signal()
     _update_failed = Signal(str)
 
@@ -585,44 +578,6 @@ class LauncherWindow(QWidget):
         net_lay.addLayout(meta_lay)
         root_layout.addWidget(net_card)
 
-        # Quick Popouts card
-        pop_card = self._make_card()
-        pop_lay = QVBoxLayout(pop_card)
-        pop_lay.setContentsMargins(12, 10, 12, 10)
-        pop_lay.setSpacing(8)
-
-        pop_title = QLabel("QUICK POPOUTS (DEFAULT BROWSER)")
-        pop_title.setObjectName("SectionTitle")
-        pop_lay.addWidget(pop_title)
-
-        els_row = QHBoxLayout()
-        els_row.setSpacing(8)
-        self.els_combo = QComboBox()
-        self.els_combo.addItems(list(self.ELS_PRESETS.keys()))
-        self.els_btn = QPushButton("Open ELS")
-        self.els_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.els_btn.clicked.connect(self._open_els)
-        els_row.addWidget(self.els_combo, 1)
-        els_row.addWidget(self.els_btn)
-        pop_lay.addLayout(els_row)
-
-        pop_btns = QHBoxLayout()
-        pop_btns.setSpacing(8)
-        self.radio_btn = QPushButton("Radio Deck\nChannels & /setslot")
-        self.radio_btn.setObjectName("PopoutBtn")
-        self.radio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.radio_btn.clicked.connect(lambda: self._open_path("/radio"))
-
-        self.comms_btn = QPushButton("Comms Hub\nRadio & Dispatch")
-        self.comms_btn.setObjectName("PopoutBtn")
-        self.comms_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.comms_btn.clicked.connect(lambda: self._open_path("/comms"))
-
-        pop_btns.addWidget(self.radio_btn, 1)
-        pop_btns.addWidget(self.comms_btn, 1)
-        pop_lay.addLayout(pop_btns)
-        root_layout.addWidget(pop_card)
-
         # Server Log card
         log_card = self._make_card()
         log_lay = QVBoxLayout(log_card)
@@ -655,10 +610,6 @@ class LauncherWindow(QWidget):
     def _open_path(self, path: str) -> None:
         snap = self.controller.snapshot()
         webbrowser.open(f"{self._base_url(snap)}{path}")
-
-    def _open_els(self) -> None:
-        preset = self.ELS_PRESETS.get(self.els_combo.currentText(), "fedsig")
-        self._open_path(f"/els?preset={urllib.parse.quote(preset)}")
 
     def _toggle_server(self) -> None:
         if self.controller.is_running():
@@ -790,8 +741,7 @@ class LauncherWindow(QWidget):
         self.host_input.setEnabled(not running)
         self.port_input.setEnabled(not running)
 
-        for btn in (self.launch_btn, self.els_btn, self.radio_btn, self.comms_btn):
-            btn.setEnabled(running)
+        self.launch_btn.setEnabled(running)
 
         self.pid_label.setText(f"PID: {snap['pid'] if snap['pid'] else '--'}")
         self.uptime_label.setText(f"Uptime: {self._format_uptime(snap['uptime']) if running else '--'}")
