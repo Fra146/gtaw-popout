@@ -28,7 +28,7 @@ GITHUB_REPO = "Fra146/gtaw-popout"
 EXE_ASSET_NAME = "GTAW-Tactical-Launcher.exe"
 SHA_ASSET_NAME = "GTAW-Tactical-Launcher.exe.sha256"
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -440,6 +440,9 @@ class LauncherWindow(QWidget):
         "ELS: Amber Utility": "amber",
     }
 
+    _update_ready = Signal()
+    _update_failed = Signal(str)
+
     def __init__(self, controller: ServerController, autostart: bool = True) -> None:
         super().__init__()
         self.controller = controller
@@ -447,6 +450,9 @@ class LauncherWindow(QWidget):
         self._last_log_text = ""
         self._update_info: dict[str, str] | None = None
         self._updating = False
+
+        self._update_ready.connect(self._on_update_ready)
+        self._update_failed.connect(self._on_update_failed)
 
         self.setObjectName("Root")
         self.setWindowTitle("GTAW Tactical Launcher")
@@ -716,21 +722,41 @@ class LauncherWindow(QWidget):
             new_exe.write_bytes(data)
             self.controller.stop()
 
+            new_s = str(new_exe).replace("'", "''")
+            cur_s = str(cur_exe).replace("'", "''")
             ps_cmd = (
                 f"Wait-Process -Id {os.getpid()} -ErrorAction SilentlyContinue; "
-                f"Move-Item -Force '{new_exe}' '{cur_exe}'; "
-                f"Start-Process '{cur_exe}'"
+                f"for ($i = 0; $i -lt 15; $i++) {{ "
+                f"  try {{ Move-Item -Force '{new_s}' '{cur_s}'; break }} "
+                f"  catch {{ Start-Sleep -Milliseconds 300 }} "
+                f"}}; "
+                f"Start-Process '{cur_s}'"
             )
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+            clean_env = {
+                k: v
+                for k, v in os.environ.items()
+                if not k.startswith(("_MEI", "_PYI", "QT_", "QML", "PYTHON"))
+            }
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                creationflags=flags,
+                env=clean_env,
             )
-            QTimer.singleShot(0, QApplication.quit)
+            self._update_ready.emit()
         except Exception as exc:
             self.controller._append_log(f"[updater] update failed: {exc}")
             new_exe.unlink(missing_ok=True)
             self._updating = False
-            QTimer.singleShot(0, lambda: (self.update_btn.setEnabled(True), self.update_btn.setText(f"Update {info['tag']}")))
+            self._update_failed.emit(info["tag"])
+
+    def _on_update_ready(self) -> None:
+        self.close()
+        QApplication.quit()
+
+    def _on_update_failed(self, tag: str) -> None:
+        self.update_btn.setEnabled(True)
+        self.update_btn.setText(f"Update {tag}")
 
     @staticmethod
     def _format_uptime(sec: object) -> str:

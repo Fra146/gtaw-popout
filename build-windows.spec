@@ -7,7 +7,7 @@ hiddenimports = (
     + collect_submodules("websockets")
     + collect_submodules("bridges")
     + collect_submodules("utils")
-    + ["main", "models"]
+    + ["main", "models", "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"]
 )
 
 a = Analysis(
